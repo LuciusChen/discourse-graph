@@ -2049,6 +2049,7 @@ With prefix argument (WITH-NOTE), also prompt for context note."
    ["Navigate"
     ("g" "Go to node" dg-goto-node)
     ("x" "Toggle context" dg-context-toggle)
+    ("b" "Go back" dg-context-go-back)
     ("p" "Graph preview" dg-graph-preview)]]
   [["View"
     ("i" "Node index" dg-node-index)
