@@ -954,7 +954,7 @@ REL is (direction rel_type node_id title type context_note)."
     ;; Context note OR summary (not both)
     (if (and context-note (not (string-empty-p context-note)))
         ;; Show context note with relation type label
-        (let ((label (format "%s_NOTE: " (upcase rel-type))))
+        (let ((label (format "[%s_NOTE] " (upcase rel-type))))
           (insert (concat
                    (propertize label 'face 'dg-context-note-label 'font-lock-face 'dg-context-note-label)
                    (format "%s\n" context-note))))
@@ -1579,7 +1579,7 @@ If FILE is nil, prompt for output path."
   :group 'discourse-graph)
 
 (defface dg-context-note-label
-  '((t :inherit font-lock-keyword-face :weight bold))
+  '((t :inherit font-lock-keyword-face))
   "Face for relation type label in context notes."
   :group 'discourse-graph)
 
