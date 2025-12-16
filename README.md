@@ -17,7 +17,7 @@ These units are connected through typed relationships:
 
 - **supports** — Evidence/Claim supports a Claim
 - **opposes** — Evidence/Claim opposes a Claim
-- **informs** — Provides background or context
+- **informs** — Provides background, context, or source reference (use for Evidence → Source)
 - **answers** — Claim answers a Question
 
 This approach, developed by [Joel Chan](https://joelchan.me/) for Roam Research, enables structured literature reviews and knowledge synthesis.
@@ -94,7 +94,7 @@ Nodes are org headings with special properties:
 :ID: i9j0k1l2
 :DG_TYPE: evidence
 :DG_SUPPORTS: e5f6g7h8
-:DG_SOURCE: m3n4o5p6
+:DG_INFORMS: m3n4o5p6
 :END:
 ```
 
@@ -156,7 +156,6 @@ Add properties directly:
 :DG_OPPOSES: target-id
 :DG_ANSWERS: target-id
 :DG_INFORMS: target-id
-:DG_SOURCE: source-id
 ```
 
 ## Querying
@@ -224,7 +223,7 @@ dot -Tpng discourse-graph.dot -o graph.png
 ### Literature Review
 1. Create a **Question** for your research question
 2. As you read papers, create **Source** nodes
-3. Extract **Evidence** from sources (link with `DG_SOURCE`)
+3. Extract **Evidence** from sources (link with `DG_INFORMS`)
 4. Formulate **Claims** that synthesize evidence
 5. Use context panel to see the argument structure
 

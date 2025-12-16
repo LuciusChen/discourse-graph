@@ -44,7 +44,8 @@
 ;; Relation Types:
 ;;   - supports: Evidence/Claim supports a Claim
 ;;   - opposes: Evidence/Claim opposes a Claim
-;;   - informs: Provides background or context
+;;   - informs: Provides background, context, or source reference
+;;              (use for Evidence → Source connections)
 ;;   - answers: Claim answers a Question
 
 ;;; Code:
@@ -775,29 +776,6 @@ Returns DG_SUMMARY property if exists, otherwise first paragraph."
         (setq result (concat (substring result 0 197) "...")))
       result)))
 
-(defun dg-get-source (id)
-  "Get the source node ID for node ID (from DG_SOURCE property).
-Returns source node ID or nil."
-  (let ((node (dg-get id)))
-    (when node
-      (let ((file (plist-get node :file))
-            (pos (plist-get node :pos)))
-        (condition-case nil
-            (let ((existing-buffer (get-file-buffer file)))
-              (with-current-buffer (or existing-buffer
-                                       (let ((inhibit-message t))
-                                         (find-file-noselect file t)))
-                (save-excursion
-                  (save-restriction
-                    (widen)
-                    (goto-char (or pos (point-min)))
-                    (or (org-entry-get nil "DG_SOURCE")
-                        ;; Check file-level keyword
-                        (save-excursion
-                          (goto-char (point-min))
-                          (when (re-search-forward "^#\\+dg_source:[ \t]*\\(.+\\)" nil t)
-                            (string-trim (match-string 1)))))))))
-          (error nil))))))
 
 ;;; ============================================================
 ;;; Statistics
@@ -871,8 +849,7 @@ Returns source node ID or nil."
          (type-info (alist-get type-sym dg-node-types))
          (short (or (plist-get type-info :short) "?"))
          (supp (plist-get attrs :support-count))
-         (opp (plist-get attrs :oppose-count))
-         (source-id (dg-get-source id)))
+         (opp (plist-get attrs :oppose-count)))
     (with-current-buffer (get-buffer-create dg--context-buffer-name)
       (let ((inhibit-read-only t))
         (erase-buffer)
@@ -890,19 +867,16 @@ Returns source node ID or nil."
         (insert (format "#+title: [%s] %s"
                         short
                         (or (plist-get node :title) "Unknown")))
-        (when (or (> supp 0) (> opp 0))
+        (cond
+         ((and (> supp 0) (> opp 0))
           (insert (format " [+%d/-%d]" supp opp)))
+         ((> supp 0)
+          (insert (format " [+%d]" supp)))
+         ((> opp 0)
+          (insert (format " [-%d]" opp))))
         (insert "\n")
         (insert (format "#+property: id %s\n" id))
 
-        ;; Source (for evidence nodes)
-        (when source-id
-          (let ((source-node (dg-get source-id)))
-            (if source-node
-                (insert (format "#+property: source [[dg:%s][%s]]\n"
-                                source-id
-                                (plist-get source-node :title)))
-              (insert (format "#+property: source %s\n" source-id)))))
 
         ;; Outgoing relations
         (when outgoing
@@ -1374,18 +1348,6 @@ Find all nodes of a type, optionally filtered by relations."
   (interactive "sSource: ")
   (dg-create-node 'source title))
 
-(defun dg-set-source (source-id)
-  "Set DG_SOURCE property to SOURCE-ID for current node.
-Typically used for Evidence nodes to reference their Source."
-  (interactive
-   (list (dg--completing-read-node "Source: " 'source)))
-  (unless (dg--get-id-at-point)
-    (user-error "No discourse graph node at point"))
-  (when source-id
-    (org-set-property "DG_SOURCE" source-id)
-    (let ((source-node (dg-get source-id)))
-      (message "Set source: %s (save to update)"
-               (or (plist-get source-node :title) source-id)))))
 
 ;;; ============================================================
 ;;; Relation Management
@@ -1432,16 +1394,6 @@ Shows all relations and lets user select which to remove."
            (list id target-id rel-type))
           (message "Removed: %s  %s (save to update context)" rel-type target-id))))))
 
-(defun dg-remove-source ()
-  "Remove DG_SOURCE property from current node."
-  (interactive)
-  (unless (dg--get-id-at-point)
-    (user-error "No discourse graph node at point"))
-  (if (org-entry-get nil "DG_SOURCE")
-      (progn
-        (org-delete-property "DG_SOURCE")
-        (message "Removed source (save to update context)"))
-    (message "No source to remove")))
 
 (defun dg-unmark-node ()
   "Remove DG_TYPE from current heading, converting it back to regular heading.
@@ -1593,10 +1545,13 @@ If FILE is nil, prompt for output path."
   "Create overlay string for node ID."
   (let ((supp (dg-attr-support-count id))
         (opp (dg-attr-oppose-count id)))
-    (when (or (> supp 0) (> opp 0))
-      (concat " "
-              (propertize (format "[+%d -%d]" supp opp)
-                          'face 'dg-overlay-face)))))
+    (cond
+     ((and (> supp 0) (> opp 0))
+      (concat " " (propertize (format "[+%d -%d]" supp opp) 'face 'dg-overlay-face)))
+     ((> supp 0)
+      (concat " " (propertize (format "[+%d]" supp) 'face 'dg-overlay-face)))
+     ((> opp 0)
+      (concat " " (propertize (format "[-%d]" opp) 'face 'dg-overlay-face))))))
 
 (defun dg-overlay-update ()
   "Update overlays for all discourse nodes in current buffer."
@@ -1999,7 +1954,6 @@ REL-TYPE is the relation type symbol."
     ("s" "Source" dg-create-source)]
    ["Relations"
     ("r" "Add relation" dg-link)
-    ("S" "Set source" dg-set-source)
     ("D" "Remove relation" dg-remove-relation)]
    ["Navigate"
     ("g" "Go to node" dg-goto-node)
