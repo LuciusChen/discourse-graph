@@ -114,6 +114,7 @@ You can add context notes to explain **why** a relation exists. These appear in 
 |-----|---------|-------------|
 | `C-c d d` | `dg-menu` | Open main menu |
 | `C-c d c` | `dg-create-node` | Create a new node |
+| `C-c d d C` | `dg-convert-to-node` | Convert heading to node |
 | `C-c d r` | `dg-link` | Add relation (smart defaults) |
 | `C-c d x` | `dg-context-toggle` | Toggle context panel |
 | `C-c d g` | `dg-goto-node` | Jump to a node |
@@ -124,15 +125,16 @@ All commands are also available via `C-c d d` (transient menu).
 ## Context Panel
 
 The context panel (`C-c d x`) shows:
+
 ```
 #+title: [CLM] Social media amplifies divisive content [+2/-1]
 #+property: id e5f6g7h8
 
-*  Answers
+*  Answers
 ** Does social media increase polarization? :QUE:
 [[dg:a1b2c3d4]]
 
-*  Supported By
+*  Supported By
 ** Study shows 40% increase... :EVD:
 [[dg:i9j0k1l2]]
 [SUPPORTS_NOTE] This study provides quantitative evidence for algorithm-driven amplification
@@ -171,6 +173,19 @@ Add properties directly:
 :DG_ANSWERS: target-id
 :DG_INFORMS: target-id
 ```
+
+## Converting Existing Headings
+
+To convert an existing org heading to a discourse graph node:
+
+1. Move to the heading
+2. `C-c d d C` (or `M-x dg-convert-to-node`)
+3. Select node type
+
+This will:
+- Create an ID if one doesn't exist
+- Add the `DG_TYPE` property
+- Update the database
 
 ## Querying
 
@@ -232,6 +247,7 @@ dot -Tsvg discourse-graph.dot -o graph.svg
 | `dg-rebuild-cache` | Rebuild entire database |
 | `dg-validate` | Check for broken links |
 | `dg-cleanup-dangling` | Remove orphaned relations |
+| `dg-find-orphan-nodes` | Find nodes without relations |
 | `dg-stats` | Show graph statistics |
 
 ## Workflow Tips
