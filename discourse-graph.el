@@ -950,8 +950,6 @@ REL is (direction rel_type node_id title type context_note)."
     ;; Link on separate line (hidden when folded)
     (insert (format "[[dg:%s]]\n" target-id))
     ;; Context note OR summary (not both)
-    ;; Context note OR summary (not both)
-    ;; Context note OR summary (not both)
     (if (and context-note (not (string-empty-p context-note)))
         ;; Show context note with relation type label
         (let ((label (format "[%s_NOTE] " (upcase rel-type))))
@@ -1378,6 +1376,22 @@ Find all nodes of a type, optionally filtered by relations."
   "Create a source node with TITLE."
   (interactive "sSource: ")
   (dg-create-node 'source title))
+
+(defun dg-convert-to-node (type)
+  "Convert current heading to a discourse graph node of TYPE."
+  (interactive
+   (list (intern (completing-read "Type: " (mapcar #'car dg-node-types)))))
+  (unless (org-at-heading-p)
+    (user-error "Not at a heading"))
+  ;; Ensure ID exists
+  (unless (org-entry-get nil "ID")
+    (org-id-get-create))
+  ;; Set DG_TYPE
+  (org-set-property "DG_TYPE" (symbol-name type))
+  (when (buffer-file-name)
+    (save-buffer)
+    (dg-update-file))
+  (message "Converted to [%s] node" type))
 
 
 ;;; ============================================================
@@ -1988,6 +2002,33 @@ With prefix argument (WITH-NOTE), also prompt for context note."
               (cl-incf removed)))))
       (message "Removed %d dangling relations" removed))))
 
+(defun dg-find-orphan-nodes ()
+  "Find nodes with no relations (neither incoming nor outgoing)."
+  (interactive)
+  (let ((orphans (sqlite-select
+                  (dg--db)
+                  "SELECT id, type, title FROM nodes
+                   WHERE id NOT IN (SELECT source_id FROM relations)
+                   AND id NOT IN (SELECT target_id FROM relations)")))
+    (if orphans
+        (with-current-buffer (get-buffer-create "*DG Orphan Nodes*")
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (insert (format "Orphan Nodes (%d)\n" (length orphans)))
+            (insert (make-string 40 ?═) "\n\n")
+            (dolist (node orphans)
+              (let* ((id (nth 0 node))
+                     (ntype (nth 1 node))
+                     (title (nth 2 node)))
+                (insert-text-button
+                 (format "[%s] %s\n" (upcase (substring ntype 0 3)) title)
+                 'action (lambda (_) (dg-goto-node-by-id id))
+                 'face 'link)))
+            (goto-char (point-min)))
+          (special-mode)
+          (pop-to-buffer (current-buffer)))
+      (message "No orphan nodes found"))))
+
 ;;; ============================================================
 ;;; Transient Menus
 ;;; ============================================================
@@ -1997,6 +2038,7 @@ With prefix argument (WITH-NOTE), also prompt for context note."
   ["Discourse Graph"
    ["Create"
     ("c" "Create node..." dg-create-node)
+    ("C" "Convert heading" dg-convert-to-node)
     ("q" "Question" dg-create-question)
     ("l" "Claim" dg-create-claim)
     ("e" "Evidence" dg-create-evidence)
@@ -2022,9 +2064,10 @@ With prefix argument (WITH-NOTE), also prompt for context note."
   [["Maintain"
     ("!" "Rebuild cache" dg-rebuild-cache)
     ("v" "Validate" dg-validate)
-    ("X" "Cleanup" dg-cleanup-dangling)]
+    ("X" "Cleanup dangling" dg-cleanup-dangling)
+    ("O" "Find orphans" dg-find-orphan-nodes)]
    ["Config"
-    ("C" "Configure..." dg-configure)]])
+    ("W" "Configure..." dg-configure)]])
 
 (transient-define-prefix dg-configure ()
   "Discourse Graph configuration."
