@@ -119,11 +119,11 @@ The context panel (`C-c d x`) shows:
 #+title: [CLM] Social media amplifies divisive content [+2/-1]
 #+property: id e5f6g7h8
 
-* → Answers
+*  Answers
 ** Does social media increase polarization? :QUE:
 [[dg:a1b2c3d4]]
 
-* ← Supported By
+*  Supported By
 ** Study shows 40% increase... :EVD:
 [[dg:i9j0k1l2]]
 Summary of the evidence...
@@ -230,8 +230,8 @@ dot -Tpng discourse-graph.dot -o graph.png
 
 ### Building Arguments
 1. Start with a **Claim** you want to support
-2. Create **Evidence** nodes that support it (`C-c d r` → supports)
-3. Note opposing evidence too (`C-c d r` → opposes)
+2. Create **Evidence** nodes that support it (`C-c d r`  supports)
+3. Note opposing evidence too (`C-c d r`  opposes)
 4. Query to see the balance: how much support vs opposition?
 
 ### Daily Use

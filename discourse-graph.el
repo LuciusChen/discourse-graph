@@ -133,9 +133,9 @@ INVERSE-NAME is the human-readable name when viewing from the target's perspecti
   :type 'boolean
   :group 'discourse-graph)
 
-(defcustom dg-context-window-width 45
-  "Width of the discourse context side window."
-  :type 'integer
+(defcustom dg-context-window-width 0.3
+  "Width of context window as fraction of frame width (0.0-1.0)."
+  :type 'float
   :group 'discourse-graph)
 
 (defcustom dg-title-templates
@@ -882,7 +882,7 @@ Returns source node ID or nil."
           (let* ((prev-id (car dg--nav-history))
                  (prev-node (dg-get prev-id))
                  (prev-title (or (plist-get prev-node :title) prev-id)))
-            (insert (format "[[dg:%s][← Back: %s]]\n\n"
+            (insert (format "[[dg:%s][ Back: %s]]\n\n"
                             prev-id
                             (truncate-string-to-width prev-title 28 nil nil "…")))))
 
@@ -910,7 +910,7 @@ Returns source node ID or nil."
             (dolist (group grouped)
               (let* ((rel-type (intern (car group)))
                      (display-name (capitalize (symbol-name rel-type))))
-                (insert (format "\n* → %s\n" display-name))
+                (insert (format "\n*  %s\n" display-name))
                 (dolist (r (cdr group))
                   (dg--insert-context-node r 'outgoing))))))
 
@@ -922,7 +922,7 @@ Returns source node ID or nil."
                      (rel-info (alist-get rel-type dg-relation-types))
                      (inverse-name (or (plist-get rel-info :inverse)
                                        (format "%s (inverse)" (car group)))))
-                (insert (format "\n* ← %s\n" inverse-name))
+                (insert (format "\n*  %s\n" inverse-name))
                 (dolist (r (cdr group))
                   (dg--insert-context-node r 'incoming))))))
 
@@ -962,6 +962,8 @@ Returns source node ID or nil."
 (defun dg-context-toggle ()
   "Toggle discourse context side window."
   (interactive)
+  (unless discourse-graph-mode
+    (user-error "Discourse Graph mode is not enabled. Run M-x discourse-graph-mode first"))
   (let ((win (get-buffer-window dg--context-buffer-name)))
     (if win
         (delete-window win)
@@ -1167,7 +1169,7 @@ More intuitive: select a node, pick relation type, see results."
         (insert (format "#+title: Relations of: %s\n\n" (plist-get node :title)))
 
         (when outgoing
-          (insert (format "* → Outgoing (%d)\n" (length outgoing)))
+          (insert (format "*  Outgoing (%d)\n" (length outgoing)))
           (dolist (n outgoing)
             (let* ((id (plist-get n :id))
                    (title (plist-get n :title))
@@ -1178,7 +1180,7 @@ More intuitive: select a node, pick relation type, see results."
               (insert (format "** %s :%s:\n[[dg:%s]]\n" title type-short id)))))
 
         (when incoming
-          (insert (format "* ← Incoming (%d)\n" (length incoming)))
+          (insert (format "*  Incoming (%d)\n" (length incoming)))
           (dolist (n incoming)
             (let* ((id (plist-get n :id))
                    (title (plist-get n :title))
@@ -1403,7 +1405,7 @@ Shows all relations and lets user select which to remove."
                       (let* ((rel-type (nth 1 r))
                              (target-id (nth 2 r))
                              (target-title (nth 3 r)))
-                        (cons (format "%s → %s (%s)"
+                        (cons (format "%s  %s (%s)"
                                       rel-type
                                       (or target-title target-id)
                                       target-id)
@@ -1428,7 +1430,7 @@ Shows all relations and lets user select which to remove."
            (dg--db)
            "DELETE FROM relations WHERE source_id = ? AND target_id = ? AND rel_type = ?"
            (list id target-id rel-type))
-          (message "Removed: %s → %s (save to update context)" rel-type target-id))))))
+          (message "Removed: %s  %s (save to update context)" rel-type target-id))))))
 
 (defun dg-remove-source ()
   "Remove DG_SOURCE property from current node."
@@ -1675,7 +1677,7 @@ REL-TYPE is the relation type symbol."
                                 (concat existing " " target-id)
                               target-id))
           (let ((target-node (dg-get target-id)))
-            (message "%s → %s (save to update)"
+            (message "%s  %s (save to update)"
                      rel-type
                      (or (plist-get target-node :title) target-id))))))))
 
@@ -1929,9 +1931,9 @@ REL-TYPE is the relation type symbol."
               (rel-type (nth 2 row)))
           ;; Check for dangling references
           (unless (gethash source node-ids)
-            (push (format "Dangling source: %s in relation %s→%s" source rel-type target) issues))
+            (push (format "Dangling source: %s in relation %s%s" source rel-type target) issues))
           (unless (gethash target node-ids)
-            (push (format "Dangling target: %s in relation %s→%s" target rel-type source) issues)))))
+            (push (format "Dangling target: %s in relation %s%s" target rel-type source) issues)))))
     ;; Check for orphan nodes
     (dolist (node nodes)
       (let* ((id (plist-get node :id))
@@ -2197,8 +2199,8 @@ All other commands available via \\[dg-menu]."
         (when (derived-mode-p 'org-mode)
           (dg-overlay-clear))))
     ;; Close context buffer
-    (when-let ((ctx-buf (get-buffer dg--context-buffer-name)))
-      (when-let ((win (get-buffer-window ctx-buf)))
+    (when-let* ((ctx-buf (get-buffer dg--context-buffer-name)))
+      (when-let* ((win (get-buffer-window ctx-buf)))
         (delete-window win))
       (kill-buffer ctx-buf))
     (setq dg--current-node-id nil)
