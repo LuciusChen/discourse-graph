@@ -1461,7 +1461,7 @@ but will be ignored until DG_TYPE is set again."
 (defun dg-export-dot (&optional file)
   "Export discourse graph to Graphviz DOT format.
 If FILE is nil, prompt for output path."
-  (interactive "FExport to DOT file: ")
+  (interactive "FExport to DOT file (use .dot extension): ")
   (let ((nodes (sqlite-select (dg--db) "SELECT id, type, title FROM nodes"))
         (relations (sqlite-select (dg--db) "SELECT source_id, target_id, rel_type FROM relations")))
     (with-temp-file file

@@ -214,10 +214,12 @@ Add properties directly:
 ## Export
 
 ### Graphviz DOT
-`C-c d d` then `E d` — Export graph structure for visualization
+`C-c d d` then `E d` — Export graph structure as DOT file
 
+Convert to image using Graphviz:
 ```bash
 dot -Tpng discourse-graph.dot -o graph.png
+dot -Tsvg discourse-graph.dot -o graph.svg
 ```
 
 ### Markdown
