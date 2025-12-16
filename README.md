@@ -94,9 +94,19 @@ Nodes are org headings with special properties:
 :ID: i9j0k1l2
 :DG_TYPE: evidence
 :DG_SUPPORTS: e5f6g7h8
+:DG_SUPPORTS_NOTE: This study provides quantitative evidence for algorithm-driven amplification
 :DG_INFORMS: m3n4o5p6
 :END:
 ```
+
+### Relation Context Notes
+
+You can add context notes to explain **why** a relation exists. These appear in the Context panel:
+
+- `DG_SUPPORTS_NOTE` — Explanation for supports relation
+- `DG_OPPOSES_NOTE` — Explanation for opposes relation
+- `DG_INFORMS_NOTE` — Explanation for informs relation
+- `DG_ANSWERS_NOTE` — Explanation for answers relation
 
 ## Key Bindings
 
@@ -126,12 +136,14 @@ The context panel (`C-c d x`) shows:
 *  Supported By
 ** Study shows 40% increase... :EVD:
 [[dg:i9j0k1l2]]
+SUPPORTS_NOTE: This study provides quantitative evidence for algorithm-driven amplification
 Summary of the evidence...
 ```
 
 - Auto-updates as you navigate between nodes
 - Click links to jump to related nodes
 - Press `b` to go back in history
+- Context notes show why relations exist
 
 ## Creating Relations
 
@@ -148,11 +160,15 @@ Summary of the evidence...
 3. Select relation type
 4. Relation is added using the link target
 
+### Adding Context Notes
+Use `C-u C-c d r` to add a relation with a context note explaining **why** the relation exists.
+
 ### Method 3: Manual
 Add properties directly:
 
 ```org
 :DG_SUPPORTS: target-id
+:DG_SUPPORTS_NOTE: Explanation of why this supports the claim
 :DG_OPPOSES: target-id
 :DG_ANSWERS: target-id
 :DG_INFORMS: target-id

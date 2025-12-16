@@ -246,12 +246,23 @@ Creates the database file and schema if they don't exist."
       context_note TEXT,
       UNIQUE(source_id, target_id, rel_type)
     )")
+  ;; Migration: add context_note column if missing (for old databases)
+  (dg--migrate-schema)
   ;; Indexes for performance
   (sqlite-execute (dg--db) "CREATE INDEX IF NOT EXISTS idx_nodes_type ON nodes(type)")
   (sqlite-execute (dg--db) "CREATE INDEX IF NOT EXISTS idx_nodes_file ON nodes(file)")
   (sqlite-execute (dg--db) "CREATE INDEX IF NOT EXISTS idx_rel_source ON relations(source_id)")
   (sqlite-execute (dg--db) "CREATE INDEX IF NOT EXISTS idx_rel_target ON relations(target_id)")
   (sqlite-execute (dg--db) "CREATE INDEX IF NOT EXISTS idx_rel_type ON relations(rel_type)"))
+
+(defun dg--migrate-schema ()
+  "Migrate database schema if needed."
+  ;; Check if context_note column exists in relations table
+  (let* ((columns (sqlite-select (dg--db) "PRAGMA table_info(relations)"))
+         (col-names (mapcar (lambda (row) (nth 1 row)) columns)))
+    (unless (member "context_note" col-names)
+      (sqlite-execute (dg--db) "ALTER TABLE relations ADD COLUMN context_note TEXT")
+      (message "Discourse Graph: migrated database schema (added context_note)"))))
 
 (defun dg-close-db ()
   "Close database connection."
@@ -357,15 +368,20 @@ TYPE is the node type symbol, TITLE is the node title string."
     (seq-uniq files)))
 
 (defun dg--parse-relations-at-point ()
-  "Parse all DG relation properties at current heading."
+  "Parse all DG relation properties at current heading.
+Returns list of (REL-TYPE . TARGET . NOTE) where NOTE may be nil."
   (let ((relations '()))
     (dolist (rel-type dg-relation-types)
-      (let* ((prop (concat "DG_" (upcase (symbol-name (car rel-type)))))
-             (value (org-entry-get nil prop)))
+      (let* ((rel-name (symbol-name (car rel-type)))
+             (prop (concat "DG_" (upcase rel-name)))
+             (note-prop (concat "DG_" (upcase rel-name) "_NOTE"))
+             (value (org-entry-get nil prop))
+             (note (org-entry-get nil note-prop)))
         (when value
           ;; Support multiple targets separated by space or comma
           (dolist (target (split-string value "[ \t,]+" t))
-            (push (cons (car rel-type) target) relations)))))
+            ;; Note applies to all targets of this relation type
+            (push (list (car rel-type) target note) relations)))))
     relations))
 
 (defun dg--get-node-type-at-point ()
@@ -446,8 +462,9 @@ Returns (NODES . RELATIONS) where each is a list."
                                   nodes)
                             (dolist (rel (dg--parse-relations-at-point))
                               (push (list :source id
-                                          :target (cdr rel)
-                                          :type (car rel))
+                                          :target (nth 1 rel)
+                                          :type (nth 0 rel)
+                                          :note (nth 2 rel))
                                     relations)))))
                     (error nil))))))
           ;; Kill buffer if we opened it
@@ -478,14 +495,15 @@ Returns (NODES . RELATIONS) where each is a list."
          (plist-get node :mtime))))
 
 (defun dg--save-relation (rel)
-  "Save REL to database."
+  "Save REL to database, including optional context note."
   (sqlite-execute
    (dg--db)
-   "INSERT OR IGNORE INTO relations (source_id, target_id, rel_type)
-    VALUES (?, ?, ?)"
+   "INSERT OR REPLACE INTO relations (source_id, target_id, rel_type, context_note)
+    VALUES (?, ?, ?, ?)"
    (list (plist-get rel :source)
          (plist-get rel :target)
-         (symbol-name (plist-get rel :type)))))
+         (symbol-name (plist-get rel :type))
+         (plist-get rel :note))))
 
 (defun dg--delete-file-data (file)
   "Delete all nodes and relations from FILE."
@@ -640,17 +658,18 @@ Type is kept as string for consistency with database."
 
 (defun dg-get-relations (id)
   "Get all relations for node ID.
-Returns plist with :outgoing and :incoming lists."
+Returns plist with :outgoing and :incoming lists.
+Each relation is (direction rel_type node_id title type context_note)."
   (let ((outgoing (sqlite-select
                    (dg--db)
-                   "SELECT 'out', rel_type, target_id, n.title, n.type
+                   "SELECT 'out', rel_type, target_id, n.title, n.type, r.context_note
                     FROM relations r
                     LEFT JOIN nodes n ON r.target_id = n.id
                     WHERE r.source_id = ?"
                    (list id)))
         (incoming (sqlite-select
                    (dg--db)
-                   "SELECT 'in', rel_type, source_id, n.title, n.type
+                   "SELECT 'in', rel_type, source_id, n.title, n.type, r.context_note
                     FROM relations r
                     LEFT JOIN nodes n ON r.source_id = n.id
                     WHERE r.target_id = ?"
@@ -869,7 +888,7 @@ Returns DG_SUMMARY property if exists, otherwise first paragraph."
                         (or (plist-get node :title) "Unknown")))
         (cond
          ((and (> supp 0) (> opp 0))
-          (insert (format " [+%d/-%d]" supp opp)))
+          (insert (format " [+%d -%d]" supp opp)))
          ((> supp 0)
           (insert (format " [+%d]" supp)))
          ((> opp 0)
@@ -916,22 +935,34 @@ Returns DG_SUMMARY property if exists, otherwise first paragraph."
                           (window-width . ,dg-context-window-width)))))))
 
 (defun dg--insert-context-node (rel direction)
-  "Insert a node entry for REL in DIRECTION (outgoing or incoming)."
-  (let* ((target-id (nth 2 rel))
+  "Insert a node entry for REL in DIRECTION (outgoing or incoming).
+REL is (direction rel_type node_id title type context_note)."
+  (let* ((rel-type (nth 1 rel))
+         (target-id (nth 2 rel))
          (target-title (or (nth 3 rel) "?"))
          (target-type (nth 4 rel))
+         (context-note (nth 5 rel))
          (type-sym (and target-type (intern target-type)))
          (type-info (and type-sym (alist-get type-sym dg-node-types)))
-         (type-short (or (plist-get type-info :short) "?"))
-         (summary (dg-get-summary target-id)))
+         (type-short (or (plist-get type-info :short) "?")))
     ;; Level 2 heading: title + type tag (no link in heading)
     (insert (format "** %s :%s:\n" target-title type-short))
     ;; Link on separate line (hidden when folded)
     (insert (format "[[dg:%s]]\n" target-id))
-    ;; Summary as body
-    (when summary
-      (insert summary)
-      (insert "\n"))))
+    ;; Context note OR summary (not both)
+    ;; Context note OR summary (not both)
+    ;; Context note OR summary (not both)
+    (if (and context-note (not (string-empty-p context-note)))
+        ;; Show context note with relation type label
+        (let ((label (format "%s_NOTE: " (upcase rel-type))))
+          (insert (concat
+                   (propertize label 'face 'dg-context-note-label 'font-lock-face 'dg-context-note-label)
+                   (format "%s\n" context-note))))
+      ;; Otherwise show summary
+      (let ((summary (dg-get-summary target-id)))
+        (when summary
+          (insert summary)
+          (insert "\n"))))))
 
 (defun dg-context-toggle ()
   "Toggle discourse context side window."
@@ -1503,10 +1534,16 @@ If FILE is nil, prompt for output path."
           ;; Attributes
           (insert "## Attributes\n\n")
           (insert (format "- **Type**: %s\n" ntype))
-          (insert (format "- **Support Score**: %+d (↑%d ↓%d)\n"
-                          (plist-get attrs :evidence-score)
-                          (plist-get attrs :support-count)
-                          (plist-get attrs :oppose-count)))
+          (let ((supp (plist-get attrs :support-count))
+                (opp (plist-get attrs :oppose-count))
+                (score (plist-get attrs :evidence-score)))
+            (cond
+             ((and (> supp 0) (> opp 0))
+              (insert (format "- **Support Score**: %+d (↑%d ↓%d)\n" score supp opp)))
+             ((> supp 0)
+              (insert (format "- **Support Score**: %+d (↑%d)\n" score supp)))
+             ((> opp 0)
+              (insert (format "- **Support Score**: %+d (↓%d)\n" score opp)))))
           ;; Relations
           (when (plist-get rels :outgoing)
             (insert "\n## Outgoing Relations\n\n")
@@ -1539,6 +1576,11 @@ If FILE is nil, prompt for output path."
 (defface dg-overlay-face
   '((t :foreground "gray60"))
   "Face for discourse graph overlay indicators."
+  :group 'discourse-graph)
+
+(defface dg-context-note-label
+  '((t :inherit font-lock-keyword-face :weight bold))
+  "Face for relation type label in context notes."
   :group 'discourse-graph)
 
 (defun dg--make-overlay-string (id)
@@ -1609,15 +1651,17 @@ If FILE is nil, prompt for output path."
             (match-string 1 path)))
          (t nil))))))
 
-(defun dg-link (rel-type)
+(defun dg-link (rel-type &optional with-note)
   "Add relation from current node.
 If cursor is on a link, use that as target; otherwise prompt.
-REL-TYPE is the relation type symbol."
+REL-TYPE is the relation type symbol.
+With prefix argument (WITH-NOTE), also prompt for context note."
   (interactive
    (list (intern (completing-read
                   "Relation: "
                   (mapcar #'car dg-relation-types)
-                  nil t))))
+                  nil t))
+         current-prefix-arg))
   (let ((source-id (dg--get-id-at-point)))
     (unless source-id
       (user-error "Not on a discourse node"))
@@ -1626,15 +1670,21 @@ REL-TYPE is the relation type symbol."
                           (dg--completing-read-node "Target: "))))
       (when target-id
         (let* ((prop (concat "DG_" (upcase (symbol-name rel-type))))
-               (existing (org-entry-get nil prop)))
+               (note-prop (concat prop "_NOTE"))
+               (existing (org-entry-get nil prop))
+               (note (when with-note
+                       (read-string "Context note (why this relation?): "))))
           (org-set-property prop
                             (if existing
                                 (concat existing " " target-id)
                               target-id))
+          (when (and note (not (string-empty-p note)))
+            (org-set-property note-prop note))
           (let ((target-node (dg-get target-id)))
-            (message "%s  %s (save to update)"
+            (message "%s -> %s%s (save to update)"
                      rel-type
-                     (or (plist-get target-node :title) target-id))))))))
+                     (or (plist-get target-node :title) target-id)
+                     (if note " [with note]" ""))))))))
 
 ;;; ============================================================
 ;;; Save/Load Queries
