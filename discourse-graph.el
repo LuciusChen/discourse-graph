@@ -1580,6 +1580,20 @@ More intuitive: select a node, pick relation type, see results."
 ;;; Relation Management
 ;;; ============================================================
 
+(defun dg--link-id-at-point ()
+  "Get the target ID of org link at point, if any."
+  (let ((context (org-element-context)))
+    (when (eq (org-element-type context) 'link)
+      (let ((link-type (org-element-property :type context))
+            (path (org-element-property :path context)))
+        (cond
+         ((string= link-type "id") path)
+         ((string= link-type "dg") path)
+         ((string= link-type "denote")
+          (when (string-match "^\\([0-9T]+\\)" path)
+            (match-string 1 path)))
+         (t nil))))))
+
 (defun dg-link (rel-type &optional with-note)
   "Add relation from current node.
 If cursor is on a link, use that as target; otherwise prompt.
