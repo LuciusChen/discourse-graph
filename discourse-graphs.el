@@ -2365,7 +2365,8 @@ but will be ignored until DG_TYPE is set again."
     ("g" "Go to node" dg-goto-node)
     ("t" "Toggle context" dg-context-toggle)
     ("b" "Go back" dg-context-go-back)
-    ("V" "Web UI" dg-ui-toggle)]
+    ("V" "Open Web UI" dg-ui-open)
+    ("K" "Close Web UI" dg-ui-stop-server)]
    ["Analysis"
     ("S" "Synthesis" dg-synthesis-open)
     ("A" "Analyze question" dg-analyze-question)
