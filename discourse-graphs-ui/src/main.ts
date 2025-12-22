@@ -80,7 +80,7 @@ class DiscourseGraphsUI {
   }
 
   private renderNode(node: Node, ctx: CanvasRenderingContext2D, globalScale: number): void {
-    const fontSize = 14 / globalScale;
+    const fontSize = 12 / globalScale;
     ctx.font = `400 ${fontSize}px Inter, sans-serif`;  // Normal weight for non-selected nodes
     
     const nodeR = Math.sqrt(Math.max(0, node.val || 1)) * 3;
@@ -175,7 +175,7 @@ class DiscourseGraphsUI {
     if (!this.primaryHighlightNode) return;
     
     const node = this.primaryHighlightNode;
-    const fontSize = 12 / globalScale;
+    const fontSize = 13 / globalScale;
     const nodeR = Math.sqrt(Math.max(0, node.val || 1)) * 4;
     
     ctx.font = `700 ${fontSize}px Inter, sans-serif`;  // Bold for selected node
