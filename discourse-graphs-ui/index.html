@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discourse Graphs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="graph"></div>
+    
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="logo">
+            <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12" cy="12" r="3" fill="currentColor"/>
+                <circle cx="6" cy="6" r="2" fill="currentColor" opacity="0.7"/>
+                <circle cx="18" cy="6" r="2" fill="currentColor" opacity="0.7"/>
+                <circle cx="6" cy="18" r="2" fill="currentColor" opacity="0.7"/>
+                <circle cx="18" cy="18" r="2" fill="currentColor" opacity="0.7"/>
+                <line x1="12" y1="12" x2="6" y2="6" stroke="currentColor" stroke-width="1.5" opacity="0.5"/>
+                <line x1="12" y1="12" x2="18" y2="6" stroke="currentColor" stroke-width="1.5" opacity="0.5"/>
+                <line x1="12" y1="12" x2="6" y2="18" stroke="currentColor" stroke-width="1.5" opacity="0.5"/>
+                <line x1="12" y1="12" x2="18" y2="18" stroke="currentColor" stroke-width="1.5" opacity="0.5"/>
+            </svg>
+            <span>Discourse Graphs</span>
+            <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+                <svg class="theme-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path class="sun-icon" d="M12 3V4M12 20V21M4 12H3M6.31412 6.31412L5.5 5.5M17.6859 6.31412L18.5 5.5M6.31412 17.69L5.5 18.5M17.6859 17.69L18.5 18.5M21 12H20M16 12C16 14.2091 14.2091 16 12 16C9.79086 16 8 14.2091 8 12C8 9.79086 9.79086 8 12 8C14.2091 8 16 9.79086 16 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <path class="moon-icon" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="status-badge disconnected" id="status">
+            <span class="status-dot"></span>
+            Connecting
+        </div>
+
+        <div class="follow-indicator" id="followIndicator">
+            <span class="follow-indicator-dot"></span>
+            Following
+        </div>
+
+        <!-- Search -->
+        <input type="text" class="search-box" id="searchBox" placeholder="Search nodes...">
+
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="nodeCount">0</div>
+                <div class="stat-label">Nodes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="linkCount">0</div>
+                <div class="stat-label">Links</div>
+            </div>
+        </div>
+
+        <!-- Type Filters -->
+        <div class="section">
+            <div class="section-title">Filter Types</div>
+            <div class="filter-items" id="filterItems">
+                <!-- Filters will be generated dynamically -->
+            </div>
+        </div>
+
+        <!-- Physics Controls -->
+        <div class="section">
+            <div class="section-title">Layout</div>
+            
+            <div class="physics-control">
+                <div class="physics-label">
+                    <span>Repulsion</span>
+                    <span class="physics-value" id="chargeValue">300</span>
+                </div>
+                <input type="range" class="physics-slider" id="chargeSlider" 
+                       min="100" max="1000" value="300" step="50">
+            </div>
+            
+            <div class="physics-control">
+                <div class="physics-label">
+                    <span>Distance</span>
+                    <span class="physics-value" id="distanceValue">80</span>
+                </div>
+                <input type="range" class="physics-slider" id="distanceSlider" 
+                       min="30" max="200" value="80" step="10">
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar toggle -->
+    <div class="sidebar-toggle" id="sidebarToggle">
+        <span class="sidebar-toggle-icon">◀</span>
+    </div>
+
+    <!-- Node info panel -->
+    <div class="node-panel" id="nodePanel">
+        <div class="node-panel-title" id="panelTitle"></div>
+        <div class="node-panel-meta" id="panelMeta"></div>
+        <div class="node-panel-file" id="panelFile"></div>
+        <button class="node-panel-action" id="openButton">
+            📂 Open in Emacs
+        </button>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- Hint -->
+    <div class="hint">
+        <div class="hint-item">
+            <span class="hint-key">/</span>
+            <span>Search</span>
+        </div>
+        <div class="hint-item">
+            <span class="hint-key">Click</span>
+            <span>Select node</span>
+        </div>
+        <div class="hint-item">
+            <span class="hint-key">Right</span>
+            <span>Open in Emacs</span>
+        </div>
+        <div class="hint-item">
+            <span class="hint-key">[</span>
+            <span>Toggle sidebar</span>
+        </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
