@@ -2366,7 +2366,8 @@ but will be ignored until DG_TYPE is set again."
     ("t" "Toggle context" dg-context-toggle)
     ("b" "Go back" dg-context-go-back)
     ("V" "Open Web UI" dg-ui-open)
-    ("K" "Close Web UI" dg-ui-stop-server)]
+    ("K" "Close Web UI" dg-ui-stop-server)
+    ("F" "Toggle Follow" dg-ui-toggle-follow)]
    ["Analysis"
     ("S" "Synthesis" dg-synthesis-open)
     ("A" "Analyze question" dg-analyze-question)
@@ -2615,24 +2616,24 @@ Opens the synthesis file and positions point at the end of the heading's content
 (transient-define-prefix dg-query-builder ()
   "Build and insert a discourse graph query dblock."
   [:description dg--qb-status-line
-   ["Filters"
-    ("n" dg--qb-set-node
-     :description (lambda () (format "Node: %s"
-                                     (if dg--qb-node-id
-                                         (truncate-string-to-width
-                                          (or (plist-get (dg-get dg--qb-node-id) :title) "?")
-                                          20 nil nil "…")
-                                       "all"))))
-    ("t" dg--qb-set-type
-     :description (lambda () (format "Type: %s" (or dg--qb-node-type "all"))))
-    ("d" dg--qb-cycle-direction
-     :description (lambda () (format "Direction: %s" dg--qb-direction)))
-    ("r" dg--qb-set-relation
-     :description (lambda () (format "Relation: %s" (or dg--qb-relation "all"))))]
-   ["Actions"
-    ("RET" "Add to Synthesis" dg--qb-insert)
-    ("c" "Clear filters" dg--qb-clear)
-    ("q" "Quit" transient-quit-one)]])
+                ["Filters"
+                 ("n" dg--qb-set-node
+                  :description (lambda () (format "Node: %s"
+                                                  (if dg--qb-node-id
+                                                      (truncate-string-to-width
+                                                       (or (plist-get (dg-get dg--qb-node-id) :title) "?")
+                                                       20 nil nil "…")
+                                                    "all"))))
+                 ("t" dg--qb-set-type
+                  :description (lambda () (format "Type: %s" (or dg--qb-node-type "all"))))
+                 ("d" dg--qb-cycle-direction
+                  :description (lambda () (format "Direction: %s" dg--qb-direction)))
+                 ("r" dg--qb-set-relation
+                  :description (lambda () (format "Relation: %s" (or dg--qb-relation "all"))))]
+                ["Actions"
+                 ("RET" "Add to Synthesis" dg--qb-insert)
+                 ("c" "Clear filters" dg--qb-clear)
+                 ("q" "Quit" transient-quit-one)]])
 
 ;;; ============================================================
 ;;; dg-query: General query dblock

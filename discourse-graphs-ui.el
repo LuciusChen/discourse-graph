@@ -397,6 +397,32 @@
 
 (add-hook 'kill-emacs-hook #'dg-ui--cleanup)
 
+;;; Follow Mode Implementation
+
+(defvar dg-ui--follow-mode nil)
+
+(defvar dg-ui--last-followed-id nil)
+
+(defun dg-ui--follow-hook ()
+  (when dg-ui--follow-mode
+    (when (and dg-ui--server (derived-mode-p 'org-mode))
+      (let ((id (org-entry-get nil "ID")))
+        (when (and id (not (string= id dg-ui--last-followed-id))
+                   (org-entry-get nil "DG_TYPE"))
+          (setq dg-ui--last-followed-id id)
+          (let ((msg (json-encode `((type . "focus")
+                                    (data . ((id . ,id)))))))
+            (dolist (client dg-ui--clients)
+              (ignore-errors (websocket-send-text client msg)))))))))
+
+(add-hook 'post-command-hook 'dg-ui--follow-hook)
+
+(defun dg-ui-toggle-follow ()
+  (interactive)
+  (setq dg-ui--follow-mode (not dg-ui--follow-mode))
+  (setq dg-ui--last-followed-id nil)
+  (message "Follow Mode %s" (if dg-ui--follow-mode "ON" "OFF")))
+
 (provide 'discourse-graphs-ui)
 
 ;;; discourse-graphs-ui.el ends here

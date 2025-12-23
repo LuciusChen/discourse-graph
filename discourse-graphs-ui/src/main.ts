@@ -323,6 +323,15 @@ class DiscourseGraphsUI {
       this.handleCommand(data);
     });
 
+    this.ws.on('focus', (data: { id: string }) => {
+      const node = this.allNodes.find(n => n.id === data.id);
+      if (node) {
+        this.primaryHighlightNode = node;
+        this.currentSelectedNode = node;
+        this.centerOnNode(node);
+      }
+    });
+
     this.ws.connect();
   }
 
