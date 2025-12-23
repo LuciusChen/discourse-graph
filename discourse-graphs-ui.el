@@ -389,14 +389,6 @@
   (remove-hook 'after-save-hook #'dg-ui--after-save-hook)
   (message "DG-UI: Auto-refresh on save disabled"))
 
-;;; Cleanup
-
-(defun dg-ui--cleanup ()
-  "Clean up servers on Emacs exit."
-  (dg-ui-stop-server))
-
-(add-hook 'kill-emacs-hook #'dg-ui--cleanup)
-
 ;;; Follow Mode Implementation
 
 (defvar dg-ui--follow-mode nil)
@@ -422,6 +414,19 @@
   (setq dg-ui--follow-mode (not dg-ui--follow-mode))
   (setq dg-ui--last-followed-id nil)
   (message "Follow Mode %s" (if dg-ui--follow-mode "ON" "OFF")))
+
+;;; Cleanup
+
+;;;###autoload
+(defun dg-ui-cleanup ()
+  "Clean up UI resources."
+  (when dg-ui--server
+    (dg-ui-stop-server)
+    (message "Web UI stopped"))
+  (when dg-ui--follow-mode
+    (setq dg-ui--follow-mode nil)
+    (setq dg-ui--last-followed-id nil))
+  (remove-hook 'post-command-hook 'dg-ui--follow-hook))
 
 (provide 'discourse-graphs-ui)
 

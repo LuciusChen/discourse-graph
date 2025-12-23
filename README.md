@@ -7,7 +7,7 @@ An Emacs org-mode implementation of the [Discourse Graphs](https://discoursegrap
 
 More screenshots available in the [assets folder](./assets)
 
-## What is a Discourse Graph?
+## What is a Discourse Graphs?
 
 Discourse Graphs are an information model that organizes knowledge into semantic units:
 

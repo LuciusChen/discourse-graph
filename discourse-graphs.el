@@ -2979,6 +2979,8 @@ All other commands available via \\[dg-menu]."
       (when-let* ((win (get-buffer-window ctx-buf)))
         (delete-window win))
       (kill-buffer ctx-buf))
+    (when (featurep 'discourse-graphs-ui)
+      (dg-ui-cleanup))
     (setq dg--current-node-id nil)
     (setq dg--nav-history nil)
     (message "Discourse Graph mode disabled")))
