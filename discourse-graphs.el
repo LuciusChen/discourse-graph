@@ -1469,7 +1469,7 @@ TYPES can be:
                           ((listp types) types)))
          (sql (if type-list
                   (format "SELECT id, type, title FROM nodes WHERE type IN (%s) ORDER BY type, title"
-                          (mapconcat (lambda (t) (format "'%s'" (symbol-name t)))
+                          (mapconcat (lambda (type) (format "'%s'" (symbol-name type)))
                                      type-list ","))
                 "SELECT id, type, title FROM nodes ORDER BY type, title"))
          (rows (sqlite-select (dg--db) sql))
