@@ -4,21 +4,20 @@ import * as d3 from 'd3';
 import { WebSocketClient } from './websocket/WebSocketClient';
 import { ColorManager } from './graph/ColorManager';
 import { FilterManager } from './graph/FilterManager';
-import { PanelManager } from './ui/PanelManager';
-import { Node, Link, GraphData } from './types';
+import { Node, Link, GraphData, ChainNode } from './types';
 
 class DiscourseGraphsUI {
   private ws: WebSocketClient;
   private graph!: ForceGraphInstance;
   private colorManager: ColorManager;
   private filterManager: FilterManager;
-  private panelManager: PanelManager;
   
   private allNodes: Node[] = [];
   private allLinks: Link[] = [];
   private highlightNodes = new Set<Node>();
   private highlightLinks = new Set<Link>();
   private primaryHighlightNode: Node | null = null;
+  private hoveredNode: Node | null = null;  // Track currently hovered node
   private currentSelectedNode: Node | null = null;
   private isSidebarCollapsed = false;
   private lastNodeClickTime: number = 0;
@@ -26,7 +25,6 @@ class DiscourseGraphsUI {
   constructor() {
     this.colorManager = new ColorManager();
     this.filterManager = new FilterManager();
-    this.panelManager = new PanelManager();
     this.ws = new WebSocketClient('ws://localhost:35904');
     
     this.initTheme();
@@ -64,28 +62,94 @@ class DiscourseGraphsUI {
       .onNodeRightClick((node: NodeObject) => 
         this.handleNodeRightClick(node as Node))
       .onNodeDragEnd((node: NodeObject) => {
+        // On drag end, keep the node fixed briefly, then release smoothly
         const n = node as Node;
         n.fx = n.x;
         n.fy = n.y;
         
+        // Release after a short delay for smooth settling
         setTimeout(() => {
           n.fx = null;
           n.fy = null;
-        }, 100);
+        }, 300);
       })
-      .d3VelocityDecay(0.3)
+      .d3VelocityDecay(0.4)  // Increased from 0.3 for smoother movement
       .cooldownTicks(100)
       .warmupTicks(50);
     
+    // Configure forces for better behavior
+    this.configureForces();
+    
     // Setup background click to clear selection
     this.setupBackgroundClick();
+  }
+
+  private configureForces(): void {
+    // Charge force (repulsion) - balanced compact
+    this.graph.d3Force('charge', d3.forceManyBody()
+      .strength(-50)  // Reduced from -80 for more compact layout
+      .distanceMax(300)  // Reduced from 400, limit range of repulsion
+    );
+    
+    // Link force - compact distance
+    this.graph.d3Force('link', d3.forceLink()
+      .distance(50)  // Reduced from 80 for more compact layout
+      .strength(0.6)  // Keep moderate link strength
+    );
+    
+    // Center force - gentle pull to center
+    this.graph.d3Force('center', d3.forceCenter(0, 0)
+      .strength(0.1)  // Slightly increased to keep graph centered
+    );
+    
+    // Radial force - keep isolated nodes from flying away
+    // Isolated nodes (with no connections) are constrained within a radius
+    this.graph.d3Force('radial', d3.forceRadial(
+      // radius function
+      (node: any) => {
+        // Count the node's connections
+        const linkCount = this.allLinks.filter(link => 
+          link.source === node || link.target === node
+        ).length;
+        
+        // Isolated nodes: constrain within radius 200
+        // Connected nodes: no radial constraint (radius 0 = no force)
+        return linkCount === 0 ? 200 : 0;
+      }
+    ).strength((node: any) => {
+      // Count the node's connections
+      const linkCount = this.allLinks.filter(link => 
+        link.source === node || link.target === node
+      ).length;
+      
+      // Isolated nodes: strong pull to radius (0.5)
+      // Connected nodes: no radial force
+      return linkCount === 0 ? 0.5 : 0;
+    }));
+    
+    // Collision force - prevent node overlap
+    this.graph.d3Force('collision', d3.forceCollide()
+      .radius((node: any) => {
+        const nodeR = Math.sqrt(Math.max(0, node.val || 1)) * 3;
+        return nodeR + 10;  // Add padding
+      })
+      .strength(0.7)  // Strong enough to prevent overlap
+    );
   }
 
   private renderNode(node: Node, ctx: CanvasRenderingContext2D, globalScale: number): void {
     const fontSize = 12 / globalScale;
     ctx.font = `400 ${fontSize}px Inter, sans-serif`;  // Normal weight for non-selected nodes
     
-    const nodeR = Math.sqrt(Math.max(0, node.val || 1)) * 3;
+    // Base node radius from value (importance)
+    const baseNodeR = Math.sqrt(Math.max(0, node.val || 1)) * 3;
+    
+    // Ensure minimum pixel size when zoomed out
+    // This prevents nodes from becoming invisible when viewing the full graph
+    const minPixelRadius = 3.5;  // Minimum 3.5 pixels on screen
+    const minWorldRadius = minPixelRadius / globalScale;  // Convert to world coordinates
+    const nodeR = Math.max(minWorldRadius, baseNodeR);
+    
     const isPrimary = node === this.primaryHighlightNode;
     const isSecondary = this.highlightNodes.has(node) && !isPrimary;
     
@@ -120,7 +184,7 @@ class DiscourseGraphsUI {
       ctx.fillStyle = gradient;
       ctx.fill();
     } else {
-      nodeColor = this.colorManager.getNodeColorDim(node.type);
+      nodeColor = this.colorManager.getNodeColorDim(node.type, isLightTheme);
       textColor = isLightTheme ? '#6b7280' : '#6b7280';
     }
     
@@ -137,8 +201,34 @@ class DiscourseGraphsUI {
       ctx.stroke();
     }
     
-    // Labels - only show for highlighted nodes OR at high zoom
-    const showLabel = isPrimary || isSecondary || globalScale >= 1.5;
+    // Dynamic label display (org-roam-ui style)
+    // Labels appear based on node importance and zoom level
+    const isHovered = node === this.hoveredNode;
+    
+    // Calculate whether to show label
+    let showLabel = false;
+    
+    if (isPrimary) {
+      // Primary (clicked) node: label rendered separately in renderPrimaryNodeLabel
+      showLabel = false;
+    } else if (isHovered) {
+      // Hovered node: always show label
+      showLabel = true;
+    } else if (isSecondary) {
+      // Secondary (connected to primary): show if zoom is reasonable
+      showLabel = globalScale >= 0.6;
+    } else {
+      // Other nodes: dynamic based on importance and zoom
+      // Similar to org-roam-ui: importance vs zoom threshold
+      const importance = node.val || 1;  // Node size reflects importance (in-degree)
+      const threshold = 1 / (globalScale * globalScale);  // Zoom threshold
+      
+      // Show label if node is important enough for current zoom level
+      // At zoom 1.0: threshold = 1, show if val > 1 (most nodes)
+      // At zoom 0.5: threshold = 4, show if val > 4 (only important nodes)
+      // At zoom 0.3: threshold = 11, show if val > 11 (very few nodes)
+      showLabel = importance > threshold;
+    }
     
     if (showLabel && !isPrimary) {
       const label = node.title;
@@ -178,15 +268,30 @@ class DiscourseGraphsUI {
     
     const node = this.primaryHighlightNode;
     const fontSize = 13 / globalScale;
-    const nodeR = Math.sqrt(Math.max(0, node.val || 1)) * 4;
+    
+    // Use same sizing logic as renderNode for consistency
+    const baseNodeR = Math.sqrt(Math.max(0, node.val || 1)) * 3;
+    const minPixelRadius = 3.5;
+    const minWorldRadius = minPixelRadius / globalScale;
+    const nodeR = Math.max(minWorldRadius, baseNodeR);
+    
+    const isLightTheme = document.body.classList.contains('light-theme');
     
     ctx.font = `700 ${fontSize}px Inter, sans-serif`;  // Bold for selected node
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffffff';
     
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-    ctx.shadowBlur = 4;
+    // Theme-aware text color and shadow
+    if (isLightTheme) {
+      ctx.fillStyle = '#1f2937';  // Dark text for light theme
+      ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';  // Light shadow
+      ctx.shadowBlur = 8;
+    } else {
+      ctx.fillStyle = '#ffffff';  // White text for dark theme
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';  // Dark shadow
+      ctx.shadowBlur = 4;
+    }
+    
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 1;
     
@@ -196,7 +301,7 @@ class DiscourseGraphsUI {
     ctx.shadowBlur = 0;
   }
 
-  private renderLink(link: Link, ctx: CanvasRenderingContext2D, _globalScale: number): void {
+  private renderLink(link: Link, ctx: CanvasRenderingContext2D, globalScale: number): void {
     const start = link.source as Node;
     const end = link.target as Node;
     
@@ -208,18 +313,31 @@ class DiscourseGraphsUI {
     // Determine line style based on style property from Emacs dg-relation-types
     const isDashed = link.style === 'dashed';
     
-    // Line style: only change color for highlighting, keep same width
-    let opacity: string;
-    let lineWidth: number = 0.8; // Consistent width for all links
+    // Dynamic line width and opacity based on zoom level
+    // Minimum line width to keep links visible when zoomed out
+    const baseWidth = isHighlight ? 1.2 : 0.8;
+    const minLineWidth = 0.6;  // Minimum pixel width
+    const lineWidth = Math.max(minLineWidth, baseWidth);
     
+    // Dynamic opacity based on zoom level
+    // When zoomed out, fade links to reduce visual clutter
+    let opacityValue: number;
     if (isHighlight) {
-      // Highlighted line: more saturated color (less transparent)
-      opacity = 'BB'; // 73% opacity (0xBB = 187/255)
+      // Highlighted links: always visible
+      opacityValue = 0.73;  // 73% opacity (same as before)
+    } else if (globalScale < 0.5) {
+      // Extremely zoomed out: very faded
+      opacityValue = 0.25;  // 25% opacity
+    } else if (globalScale < 0.8) {
+      // Zoomed out: faded
+      opacityValue = 0.4;  // 40% opacity
     } else {
-      // Normal state: same for both selected and non-selected
-      // Keep links visible when node is selected
-      opacity = '50'; // 31% opacity
+      // Normal or zoomed in: standard opacity
+      opacityValue = 0.31;  // 31% opacity (same as before)
     }
+    
+    // Convert to hex opacity
+    const opacity = Math.round(opacityValue * 255).toString(16).padStart(2, '0').toUpperCase();
     
     // Set dashed/solid style based on style property
     if (isDashed) {
@@ -239,11 +357,16 @@ class DiscourseGraphsUI {
     // Reset line dash
     ctx.setLineDash([]);
     
-    // Calculate arrow position
+    // Calculate arrow position using target node's actual size (same as renderNode)
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const angle = Math.atan2(dy, dx);
-    const nodeR = 8;
+    
+    // Use same sizing logic as renderNode for consistency
+    const baseNodeR = Math.sqrt(Math.max(0, end.val || 1)) * 3;
+    const minPixelRadius = 3.5;
+    const minWorldRadius = minPixelRadius / globalScale;
+    const nodeR = Math.max(minWorldRadius, baseNodeR);
     
     const arrowX = end.x - Math.cos(angle) * nodeR;
     const arrowY = end.y - Math.sin(angle) * nodeR;
@@ -268,6 +391,7 @@ class DiscourseGraphsUI {
   }
 
   private handleNodeHover(node: Node | null): void {
+    this.hoveredNode = node;  // Track hovered node
     this.highlightNodes.clear();
     this.highlightLinks.clear();
     
@@ -282,8 +406,8 @@ class DiscourseGraphsUI {
         }
       });
     } else {
-      // Mouse left all nodes - schedule panel hide
-      this.panelManager.scheduleHide(1000);
+      // Mouse left all nodes - no action needed for right panel
+      // Right panel stays open until user clicks close or background
     }
     
     if (this.primaryHighlightNode) {
@@ -295,7 +419,8 @@ class DiscourseGraphsUI {
     this.lastNodeClickTime = Date.now();
     this.currentSelectedNode = node;
     this.primaryHighlightNode = node;
-    this.panelManager.show(node);
+    
+    // Node is now highlighted, user can press 'E' to export or right-click to open in Emacs
   }
 
   private handleNodeRightClick(node: Node): void {
@@ -308,7 +433,6 @@ class DiscourseGraphsUI {
     this.currentSelectedNode = null;
     this.highlightNodes.clear();
     this.highlightLinks.clear();
-    this.panelManager.hide();
   }
 
   private setupBackgroundClick(): void {
@@ -335,7 +459,7 @@ class DiscourseGraphsUI {
 
   private openNode(node: Node): void {
     if (!this.ws.isConnected()) {
-      this.showToast('❌ Not connected to Emacs');
+      this.showToast('Not connected to Emacs');
       return;
     }
     
@@ -344,7 +468,7 @@ class DiscourseGraphsUI {
       data: { id: node.id }
     });
     
-    this.showToast('📂 Opening in Emacs...');
+    this.showToast('Opening in Emacs...');
   }
 
   private setupWebSocket(): void {
@@ -377,9 +501,30 @@ class DiscourseGraphsUI {
   }
 
   private updateGraphData(data: GraphData): void {
+    // Calculate in-degree (how many links point TO each node)
+    // In discourse graphs, a node with more incoming links is more "important"
+    // - A claim supported by many evidences
+    // - A source cited by many claims
+    // - A question answered by many claims
+    const inDegreeMap = new Map<string, number>();
+    
+    // Initialize all nodes with 0
+    data.nodes.forEach(node => {
+      inDegreeMap.set(node.id, 0);
+    });
+    
+    // Count incoming links for each node
+    data.links.forEach(link => {
+      const targetId = typeof link.target === 'string' ? link.target : link.target.id;
+      inDegreeMap.set(targetId, (inDegreeMap.get(targetId) || 0) + 1);
+    });
+    
+    // Set node val based on in-degree
+    // Use logarithmic scale to avoid huge size differences
+    // Base size 1, increases with in-degree
     this.allNodes = data.nodes.map(node => ({
       ...node,
-      val: 1
+      val: 1 + Math.sqrt(inDegreeMap.get(node.id) || 0) * 0.5
     }));
 
     this.allLinks = data.links.map(link => ({
@@ -450,6 +595,14 @@ class DiscourseGraphsUI {
       nodeIds.has((l.target as Node).id || (l.target as string))
     );
     
+    // Check if currently highlighted node is filtered out
+    if (this.primaryHighlightNode && !nodeIds.has(this.primaryHighlightNode.id)) {
+      // Clear highlights
+      this.primaryHighlightNode = null;
+      this.highlightNodes.clear();
+      this.highlightLinks.clear();
+    }
+    
     // Preserve node positions from previous state
     const currentData = this.graph.graphData();
     const positionMap = new Map<string, { x: number; y: number; vx?: number; vy?: number }>();
@@ -467,15 +620,16 @@ class DiscourseGraphsUI {
       });
     }
     
-    // Restore positions to filtered nodes
+    // Restore positions to filtered nodes and dampen velocities
     filteredNodes.forEach(node => {
       const savedPos = positionMap.get(node.id);
       if (savedPos) {
         node.x = savedPos.x;
         node.y = savedPos.y;
-        node.vx = savedPos.vx;
-        node.vy = savedPos.vy;
-        // Don't fix position, allow gentle adjustment
+        // Dampen velocities to prevent sudden movements
+        node.vx = (savedPos.vx || 0) * 0.3;
+        node.vy = (savedPos.vy || 0) * 0.3;
+        // Don't fix position
         node.fx = null;
         node.fy = null;
       }
@@ -488,18 +642,20 @@ class DiscourseGraphsUI {
     document.getElementById('nodeCount')!.textContent = filteredNodes.length.toString();
     document.getElementById('linkCount')!.textContent = filteredLinks.length.toString();
     
-    // Gently reheat simulation for new nodes to settle
-    // Use lower alpha for smoother transition
+    // Gently reheat simulation with very low alpha for smooth transition
     const d3Sim = this.graph.d3Force('simulation');
     if (d3Sim) {
-      d3Sim.alpha(0.3).restart();
+      d3Sim.alpha(0.2).alphaTarget(0).restart();
     }
     
-    // Auto-fit view with smooth animation
+    // Reconfigure forces to handle new graph structure
+    this.configureForces();
+    
+    // Auto-fit view with smooth animation (delayed for better effect)
     if (filteredNodes.length > 0) {
       setTimeout(() => {
-        this.graph.zoomToFit(800, 50); // Longer duration for smoother zoom
-      }, 100);
+        this.graph.zoomToFit(1000, 80);  // Longer duration, more padding
+      }, 300);
     }
   }
 
@@ -515,7 +671,10 @@ class DiscourseGraphsUI {
     chargeSlider.addEventListener('input', (e) => {
       const value = (e.target as HTMLInputElement).value;
       document.getElementById('chargeValue')!.textContent = value;
-      this.graph.d3Force('charge', d3.forceManyBody().strength(-Number(value)));
+      this.graph.d3Force('charge', d3.forceManyBody()
+        .strength(-Number(value))
+        .distanceMax(300)  // Updated to match new default
+      );
       this.graph.d3ReheatSimulation();
     });
 
@@ -537,11 +696,6 @@ class DiscourseGraphsUI {
     const themeToggle = document.getElementById('themeToggle')!;
     themeToggle.addEventListener('click', () => {
       this.toggleTheme();
-    });
-
-    // Panel open button
-    this.panelManager.onOpen((node) => {
-      this.openNode(node);
     });
 
     // Window resize with debounce and re-centering
@@ -602,6 +756,10 @@ class DiscourseGraphsUI {
         (document.getElementById('searchBox') as HTMLInputElement).focus();
       } else if (e.key === '?' || (e.key === 'h' && !e.ctrlKey && !e.metaKey)) {
         this.showHelp();
+      } else if ((e.key === 'e' || e.key === 'E') && this.currentSelectedNode) {
+        // Export argument chain as Markdown
+        e.preventDefault();
+        this.exportArgumentChain(this.currentSelectedNode);
       }
     });
   }
@@ -611,25 +769,275 @@ class DiscourseGraphsUI {
 🎮 Controls
 
 Mouse:
+• Click node = Show details in right panel
+• Right-click node = Open in Emacs
 • Drag node = Adjust node position
 • Drag background = Pan the graph ⭐
 • Scroll wheel = Zoom
-• Click node = Select
-• Right-click node = Open in Emacs
 
 Keyboard shortcuts:
 • / or Ctrl+F = Search nodes
 • R = Refresh data
-• [ or ] = Toggle sidebar
+• [ or ] = Toggle left sidebar
 • Enter = Open selected node
+• E = Export argument chain (with full content)
 • ? or H = Show this help
+
+Right Panel:
+• 📋 Copy = Copy node content
+• 📂 Open = Open in Emacs
+• 📋 Copy Chain = Export argument chain
+• Click context nodes = Navigate
 
 Tip:
 Want to move the entire graph?
 → Just drag the background to pan the canvas!
     `.trim();
     
-    this.showToast(helpText, 8000);
+    this.showToast(helpText, 10000);
+  }
+
+  private exportArgumentChain(node: Node): void {
+    // Build the argument chain structure
+    const chain = this.buildArgumentChain(node);
+    
+    // Generate Markdown
+    const text = this.formatAsMarkdown(node, chain);
+
+    // Copy to clipboard
+    this.copyToClipboard(text);
+    
+    this.showToast('Argument chain exported!', 3000);
+  }
+
+  private buildArgumentChain(rootNode: Node): Map<string, ChainNode> {
+    const chainNodes = new Map<string, ChainNode>();
+    const visited = new Set<string>();
+    
+    // Recursive function to build chain
+    const addNodeAndRelations = (nodeId: string, depth: number = 0) => {
+      // Prevent infinite recursion
+      if (depth > 10 || visited.has(nodeId)) return;
+      visited.add(nodeId);
+      
+      const node = this.allNodes.find(n => n.id === nodeId);
+      if (!node) return;
+      
+      // Add node to chain if not already there
+      if (!chainNodes.has(nodeId)) {
+        chainNodes.set(nodeId, {
+          node: node,
+          supporters: [],
+          opposers: [],
+          informers: [],
+          answerers: []
+        });
+      }
+      
+      const chainNode = chainNodes.get(nodeId)!;
+      
+      // Find all links where this node is the target
+      const incomingLinks = this.allLinks.filter(link => {
+        const target = typeof link.target === 'string' ? link.target : (link.target as Node).id;
+        return target === nodeId;
+      });
+      
+      // Process each incoming link
+      incomingLinks.forEach(link => {
+        const sourceId = typeof link.source === 'string' ? link.source : (link.source as Node).id;
+        const sourceNode = this.allNodes.find(n => n.id === sourceId);
+        
+        if (!sourceNode) return;
+        
+        // Add source node to appropriate category
+        if (link.type === 'supports' && !chainNode.supporters.find(n => n.id === sourceId)) {
+          chainNode.supporters.push(sourceNode);
+          addNodeAndRelations(sourceId, depth + 1);
+        } else if (link.type === 'opposes' && !chainNode.opposers.find(n => n.id === sourceId)) {
+          chainNode.opposers.push(sourceNode);
+          addNodeAndRelations(sourceId, depth + 1);
+        } else if (link.type === 'informs' && !chainNode.informers.find(n => n.id === sourceId)) {
+          chainNode.informers.push(sourceNode);
+          addNodeAndRelations(sourceId, depth + 1);
+        } else if (link.type === 'answers' && !chainNode.answerers.find(n => n.id === sourceId)) {
+          chainNode.answerers.push(sourceNode);
+          addNodeAndRelations(sourceId, depth + 1);
+        }
+      });
+    };
+    
+    // Start building from root
+    addNodeAndRelations(rootNode.id);
+    
+    return chainNodes;
+  }
+
+  private cleanOrgContent(content: string): string {
+    if (!content) return '';
+    
+    let cleaned = content;
+    
+    // Remove first heading line
+    cleaned = cleaned.replace(/^\*+ .*$/m, '');
+    
+    // Remove PROPERTIES drawers
+    cleaned = cleaned.replace(/:PROPERTIES:[\s\S]*?:END:/g, '');
+    
+    // Remove LOGBOOK drawers
+    cleaned = cleaned.replace(/:LOGBOOK:[\s\S]*?:END:/g, '');
+    
+    // Convert org sub-headings to markdown (from deepest to shallowest)
+    cleaned = cleaned.replace(/^\*\*\*\*\* (.*)$/gm, '##### $1');
+    cleaned = cleaned.replace(/^\*\*\*\* (.*)$/gm, '#### $1');
+    cleaned = cleaned.replace(/^\*\*\* (.*)$/gm, '### $1');
+    cleaned = cleaned.replace(/^\*\* (.*)$/gm, '## $1');
+    cleaned = cleaned.replace(/^\* (.*)$/gm, '# $1');
+    
+    // Clean up excessive newlines
+    cleaned = cleaned.replace(/\n\n\n+/g, '\n\n');
+    
+    return cleaned.trim();
+  }
+
+  private cleanOrgContentWithHeading(content: string, node: Node): string {
+    if (!content) return '';
+    
+    let cleaned = content;
+    
+    // Extract the original heading level (count the stars)
+    const headingMatch = content.match(/^(\*+) /m);
+    const headingLevel = headingMatch ? headingMatch[1].length : 1;
+    
+    // Remove PROPERTIES drawers
+    cleaned = cleaned.replace(/:PROPERTIES:[\s\S]*?:END:/g, '');
+    
+    // Remove LOGBOOK drawers
+    cleaned = cleaned.replace(/:LOGBOOK:[\s\S]*?:END:/g, '');
+    
+    // Remove the original org heading line
+    cleaned = cleaned.replace(/^\*+ .*$/m, '');
+    
+    // Convert org sub-headings to markdown (from deepest to shallowest)
+    cleaned = cleaned.replace(/^\*\*\*\*\* (.*)$/gm, '##### $1');
+    cleaned = cleaned.replace(/^\*\*\*\* (.*)$/gm, '#### $1');
+    cleaned = cleaned.replace(/^\*\*\* (.*)$/gm, '### $1');
+    cleaned = cleaned.replace(/^\*\* (.*)$/gm, '## $1');
+    cleaned = cleaned.replace(/^\* (.*)$/gm, '# $1');
+    
+    // Clean up excessive newlines
+    cleaned = cleaned.replace(/\n\n\n+/g, '\n\n');
+    
+    cleaned = cleaned.trim();
+    
+    // Add formatted heading with type short at the original org level
+    const typeShort = node.typeShort || node.type.toUpperCase();
+    const headingPrefix = '#'.repeat(headingLevel);
+    const heading = `${headingPrefix} ${typeShort}-${node.title}`;
+    
+    return cleaned ? `${heading}\n\n${cleaned}` : heading;
+  }
+
+  private formatAsMarkdown(rootNode: Node, chain: Map<string, ChainNode>): string {
+    const lines: string[] = [];
+    const rootChainNode = chain.get(rootNode.id);
+
+    if (!rootChainNode) return '';
+
+    // Title
+    lines.push('# Argument Chain\n');
+    
+    // Main node with type short (QUE-Title format)
+    const typeShort = rootNode.typeShort || rootNode.type.toUpperCase();
+    lines.push(`## ${typeShort}-${rootNode.title}\n`);
+    
+    // Content (cleaned)
+    if (rootNode.content) {
+      const cleaned = this.cleanOrgContent(rootNode.content);
+      if (cleaned) {
+        lines.push('\n' + cleaned + '\n');
+      }
+    }
+
+    // Supporting evidence
+    if (rootChainNode.supporters.length > 0) {
+      lines.push('\n**Supported By:**\n');
+      rootChainNode.supporters.forEach(node => {
+        const short = node.typeShort || node.type.toUpperCase();
+        lines.push(`- **${short}-${node.title}**`);
+        if (node.content) {
+          const cleaned = this.cleanOrgContent(node.content);
+          if (cleaned) {
+            const indented = cleaned.split('\n').map(l => '  ' + l).join('\n');
+            lines.push('  ');
+            lines.push(indented);
+            lines.push('');
+          }
+        }
+      });
+      lines.push('');
+    }
+
+    // Counter-arguments
+    if (rootChainNode.opposers.length > 0) {
+      lines.push('**Opposed By:**\n');
+      rootChainNode.opposers.forEach(node => {
+        const short = node.typeShort || node.type.toUpperCase();
+        lines.push(`- **${short}-${node.title}**`);
+        if (node.content) {
+          const cleaned = this.cleanOrgContent(node.content);
+          if (cleaned) {
+            const indented = cleaned.split('\n').map(l => '  ' + l).join('\n');
+            lines.push('  ');
+            lines.push(indented);
+            lines.push('');
+          }
+        }
+      });
+      lines.push('');
+    }
+
+    // Context
+    if (rootChainNode.informers.length > 0) {
+      lines.push('**Informed By:**\n');
+      rootChainNode.informers.forEach(node => {
+        const short = node.typeShort || node.type.toUpperCase();
+        lines.push(`- ${short}-${node.title}`);
+      });
+      lines.push('');
+    }
+
+    // Answers
+    if (rootChainNode.answerers.length > 0) {
+      lines.push('**Answered By:**\n');
+      rootChainNode.answerers.forEach(node => {
+        const short = node.typeShort || node.type.toUpperCase();
+        lines.push(`- ${short}-${node.title}`);
+      });
+      lines.push('');
+    }
+
+    // Metadata
+    lines.push('---');
+    lines.push('*Exported from Discourse Graph*');
+    lines.push(`*Total nodes: ${chain.size}*`);
+
+    return lines.join('\n');
+  }
+
+  private async copyToClipboard(text: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      // Fallback for older browsers
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
   }
 
   private handleSearch(query: string): void {

@@ -3,8 +3,10 @@ import { Node, Link } from '../types';
 export class ColorManager {
   private nodeColorMap = new Map<string, string>();
   private linkColorMap = new Map<string, string>();
-  private nodeColorMapDim = new Map<string, string>();
-  private linkColorMapDim = new Map<string, string>();
+  private nodeColorMapDimDark = new Map<string, string>();  // For dark theme
+  private nodeColorMapDimLight = new Map<string, string>(); // For light theme
+  private linkColorMapDimDark = new Map<string, string>();
+  private linkColorMapDimLight = new Map<string, string>();
 
   private readonly PREDEFINED_NODE_COLORS: Record<string, string> = {
     // org-roam-ui inspired colors - softer, more pleasant
@@ -36,11 +38,13 @@ export class ColorManager {
         const color = this.generateColor(index, nodeTypesArray.length);
         this.nodeColorMap.set(type, color);
       }
-      // Dim version
-      this.nodeColorMapDim.set(type, '#4a5568');
+      // Dim versions for different themes
+      this.nodeColorMapDimDark.set(type, '#4a5568');   // Dark theme: darker gray
+      this.nodeColorMapDimLight.set(type, '#cbd5e1');  // Light theme: lighter gray
     });
     this.nodeColorMap.set('default', '#64748b');
-    this.nodeColorMapDim.set('default', '#4a5568');
+    this.nodeColorMapDimDark.set('default', '#4a5568');
+    this.nodeColorMapDimLight.set('default', '#cbd5e1');
 
     // Build link color map
     const linkTypesArray = Array.from(linkTypes).sort();
@@ -51,11 +55,13 @@ export class ColorManager {
         const color = this.generateColor(index, linkTypesArray.length);
         this.linkColorMap.set(type, color);
       }
-      // Dim version
-      this.linkColorMapDim.set(type, '#374151');
+      // Dim versions for different themes
+      this.linkColorMapDimDark.set(type, '#374151');   // Dark theme: darker gray
+      this.linkColorMapDimLight.set(type, '#94a3b8');  // Light theme: lighter gray
     });
     this.linkColorMap.set('default', '#475569');
-    this.linkColorMapDim.set('default', '#374151');
+    this.linkColorMapDimDark.set('default', '#374151');
+    this.linkColorMapDimLight.set('default', '#94a3b8');
   }
 
   private generateColor(index: number, total: number): string {
@@ -95,12 +101,14 @@ export class ColorManager {
     return this.linkColorMap.get(type) || this.linkColorMap.get('default')!;
   }
 
-  getNodeColorDim(type: string): string {
-    return this.nodeColorMapDim.get(type) || this.nodeColorMapDim.get('default')!;
+  getNodeColorDim(type: string, isLightTheme: boolean = false): string {
+    const map = isLightTheme ? this.nodeColorMapDimLight : this.nodeColorMapDimDark;
+    return map.get(type) || map.get('default')!;
   }
 
-  getLinkColorDim(type: string): string {
-    return this.linkColorMapDim.get(type) || this.linkColorMapDim.get('default')!;
+  getLinkColorDim(type: string, isLightTheme: boolean = false): string {
+    const map = isLightTheme ? this.linkColorMapDimLight : this.linkColorMapDimDark;
+    return map.get(type) || map.get('default')!;
   }
 
   getAllNodeColors(): Map<string, string> {

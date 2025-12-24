@@ -7,8 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="/assets/index-CLSzW8E9.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-CUB8xMUA.css">
+  <script type="module" crossorigin src="/assets/index-BMpbdyWO.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DZys2v9m.css">
 </head>
 <body>
     <div id="graph"></div>
@@ -75,19 +75,19 @@
             <div class="physics-control">
                 <div class="physics-label">
                     <span>Repulsion</span>
-                    <span class="physics-value" id="chargeValue">300</span>
+                    <span class="physics-value" id="chargeValue">50</span>
                 </div>
                 <input type="range" class="physics-slider" id="chargeSlider" 
-                       min="100" max="1000" value="300" step="50">
+                       min="20" max="300" value="50" step="5">
             </div>
             
             <div class="physics-control">
                 <div class="physics-label">
                     <span>Distance</span>
-                    <span class="physics-value" id="distanceValue">80</span>
+                    <span class="physics-value" id="distanceValue">50</span>
                 </div>
                 <input type="range" class="physics-slider" id="distanceSlider" 
-                       min="30" max="200" value="80" step="10">
+                       min="20" max="150" value="50" step="5">
             </div>
         </div>
     </div>
@@ -95,16 +95,6 @@
     <!-- Sidebar toggle -->
     <div class="sidebar-toggle" id="sidebarToggle">
         <span class="sidebar-toggle-icon">◀</span>
-    </div>
-
-    <!-- Node info panel -->
-    <div class="node-panel" id="nodePanel">
-        <div class="node-panel-title" id="panelTitle"></div>
-        <div class="node-panel-meta" id="panelMeta"></div>
-        <div class="node-panel-file" id="panelFile"></div>
-        <button class="node-panel-action" id="openButton">
-            📂 Open in Emacs
-        </button>
     </div>
 
     <!-- Toast -->
