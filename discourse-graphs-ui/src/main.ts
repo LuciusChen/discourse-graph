@@ -21,6 +21,7 @@ class DiscourseGraphsUI {
   private primaryHighlightNode: Node | null = null;
   private currentSelectedNode: Node | null = null;
   private isSidebarCollapsed = false;
+  private lastNodeClickTime: number = 0;
 
   constructor() {
     this.colorManager = new ColorManager();
@@ -63,20 +64,21 @@ class DiscourseGraphsUI {
       .onNodeRightClick((node: NodeObject) => 
         this.handleNodeRightClick(node as Node))
       .onNodeDragEnd((node: NodeObject) => {
-        // Keep node at dragged position temporarily (like before)
         const n = node as Node;
         n.fx = n.x;
         n.fy = n.y;
         
-        // After a short delay, release to allow gentle settling in place
         setTimeout(() => {
           n.fx = null;
           n.fy = null;
         }, 100);
       })
-      .d3VelocityDecay(0.3)  // Back to original value
+      .d3VelocityDecay(0.3)
       .cooldownTicks(100)
       .warmupTicks(50);
+    
+    // Setup background click to clear selection
+    this.setupBackgroundClick();
   }
 
   private renderNode(node: Node, ctx: CanvasRenderingContext2D, globalScale: number): void {
@@ -201,18 +203,41 @@ class DiscourseGraphsUI {
     if (!start.x || !start.y || !end.x || !end.y) return;
     
     const isHighlight = this.highlightLinks.has(link);
-    const color = isHighlight 
-      ? this.colorManager.getLinkColor(link.type)
-      : this.colorManager.getLinkColorDim(link.type);
-    const opacity = isHighlight ? '' : '60';
+    const color = this.colorManager.getLinkColor(link.type);
     
-    // Draw link line
+    // Determine line style based on style property from Emacs dg-relation-types
+    const isDashed = link.style === 'dashed';
+    
+    // Line style: only change color for highlighting, keep same width
+    let opacity: string;
+    let lineWidth: number = 0.8; // Consistent width for all links
+    
+    if (isHighlight) {
+      // Highlighted line: more saturated color (less transparent)
+      opacity = 'BB'; // 73% opacity (0xBB = 187/255)
+    } else {
+      // Normal state: same for both selected and non-selected
+      // Keep links visible when node is selected
+      opacity = '50'; // 31% opacity
+    }
+    
+    // Set dashed/solid style based on style property
+    if (isDashed) {
+      ctx.setLineDash([3, 3]); // dashed
+    } else {
+      ctx.setLineDash([]); // solid
+    }
+    
+    // Draw line
     ctx.strokeStyle = color + opacity;
-    ctx.lineWidth = 1;
+    ctx.lineWidth = lineWidth;
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
     ctx.lineTo(end.x, end.y);
     ctx.stroke();
+    
+    // Reset line dash
+    ctx.setLineDash([]);
     
     // Calculate arrow position
     const dx = end.x - start.x;
@@ -223,39 +248,23 @@ class DiscourseGraphsUI {
     const arrowX = end.x - Math.cos(angle) * nodeR;
     const arrowY = end.y - Math.sin(angle) * nodeR;
     
-    // Draw arrow
-    const arrowLength = 5;
+    // Draw arrow: small and refined (particle animation exists, arrow can be small)
+    const arrowLength = isHighlight ? 4 : 3.5;
+    const arrowAngle = Math.PI / 6; // narrower angle, more refined
+    
     ctx.fillStyle = color + opacity;
     ctx.beginPath();
     ctx.moveTo(arrowX, arrowY);
     ctx.lineTo(
-      arrowX - arrowLength * Math.cos(angle - Math.PI / 5),
-      arrowY - arrowLength * Math.sin(angle - Math.PI / 5)
+      arrowX - arrowLength * Math.cos(angle - arrowAngle),
+      arrowY - arrowLength * Math.sin(angle - arrowAngle)
     );
     ctx.lineTo(
-      arrowX - arrowLength * Math.cos(angle + Math.PI / 5),
-      arrowY - arrowLength * Math.sin(angle + Math.PI / 5)
+      arrowX - arrowLength * Math.cos(angle + arrowAngle),
+      arrowY - arrowLength * Math.sin(angle + arrowAngle)
     );
     ctx.closePath();
     ctx.fill();
-    
-    // Add subtle edge for highlighted links
-    if (isHighlight) {
-      ctx.beginPath();
-      ctx.moveTo(arrowX, arrowY);
-      ctx.lineTo(
-        arrowX - arrowLength * Math.cos(angle - Math.PI / 5),
-        arrowY - arrowLength * Math.sin(angle - Math.PI / 5)
-      );
-      ctx.lineTo(
-        arrowX - arrowLength * Math.cos(angle + Math.PI / 5),
-        arrowY - arrowLength * Math.sin(angle + Math.PI / 5)
-      );
-      ctx.closePath();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-      ctx.lineWidth = 0.3;
-      ctx.stroke();
-    }
   }
 
   private handleNodeHover(node: Node | null): void {
@@ -283,6 +292,7 @@ class DiscourseGraphsUI {
   }
 
   private handleNodeClick(node: Node): void {
+    this.lastNodeClickTime = Date.now();
     this.currentSelectedNode = node;
     this.primaryHighlightNode = node;
     this.panelManager.show(node);
@@ -290,6 +300,37 @@ class DiscourseGraphsUI {
 
   private handleNodeRightClick(node: Node): void {
     this.openNode(node);
+  }
+
+  private handleBackgroundClick(): void {
+    // Clear focus when clicking on empty space
+    this.primaryHighlightNode = null;
+    this.currentSelectedNode = null;
+    this.highlightNodes.clear();
+    this.highlightLinks.clear();
+    this.panelManager.hide();
+  }
+
+  private setupBackgroundClick(): void {
+    // Listen for clicks on the canvas to detect background clicks
+    const canvas = document.querySelector('#graph canvas');
+    if (canvas) {
+      canvas.addEventListener('click', (event) => {
+        // Check if click is on empty space (not handled by node click)
+        // The graph library handles node clicks, so this only fires for background
+        const target = event.target as HTMLElement;
+        if (target.tagName === 'CANVAS') {
+          // Small delay to let node click handler execute first
+          setTimeout(() => {
+            // If no node was clicked (currentSelectedNode wasn't just set)
+            const clickTime = Date.now();
+            if (!this.lastNodeClickTime || clickTime - this.lastNodeClickTime > 50) {
+              this.handleBackgroundClick();
+            }
+          }, 10);
+        }
+      });
+    }
   }
 
   private openNode(node: Node): void {
@@ -344,7 +385,8 @@ class DiscourseGraphsUI {
     this.allLinks = data.links.map(link => ({
       source: link.source,
       target: link.target,
-      type: link.type || 'default'
+      type: link.type || 'default',
+      style: link.style || 'solid' // Preserve style property, default to solid
     }));
 
     // Build color maps
@@ -527,25 +569,25 @@ class DiscourseGraphsUI {
 
   private showHelp(): void {
     const helpText = `
-🎮 控制说明
+🎮 Controls
 
-鼠标操作：
-• 拖动节点 = 调整节点位置
-• 拖动空白 = 平移整个图形 ⭐
-• 滚轮 = 缩放
-• 单击节点 = 选中
-• 右键节点 = 在 Emacs 中打开
+Mouse:
+• Drag node = Adjust node position
+• Drag background = Pan the graph ⭐
+• Scroll wheel = Zoom
+• Click node = Select
+• Right-click node = Open in Emacs
 
-键盘快捷键：
-• / 或 Ctrl+F = 搜索节点
-• R = 刷新数据
-• [ 或 ] = 切换侧边栏
-• Enter = 打开选中节点
-• ? 或 H = 显示此帮助
+Keyboard shortcuts:
+• / or Ctrl+F = Search nodes
+• R = Refresh data
+• [ or ] = Toggle sidebar
+• Enter = Open selected node
+• ? or H = Show this help
 
-提示：
-想移动整个图形到其他位置？
-→ 拖动空白区域即可平移画布！
+Tip:
+Want to move the entire graph?
+→ Just drag the background to pan the canvas!
     `.trim();
     
     this.showToast(helpText, 8000);

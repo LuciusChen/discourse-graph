@@ -15,6 +15,7 @@ export interface Link {
   source: Node | string;
   target: Node | string;
   type: string;
+  style?: string;  // 'solid' or 'dashed'
 }
 
 export interface GraphData {
