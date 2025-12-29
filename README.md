@@ -35,7 +35,6 @@ This approach, developed by [Joel Chan](https://joelchan.me/) for Roam Research,
 - **Customizable attributes** — Formula DSL for computing node metrics
 - **Smart relation creation** — Suggests relation types based on node types
 - **Denote compatible** — Works with denote file naming conventions
-- **Export** — Markdown export with wikilinks
 
 ## Requirements
 
@@ -158,11 +157,11 @@ Press `C-c d d` to open the main menu:
 │  b Go back      │  Q Query builder                          │
 │  V Web UI       │  I Node index                             │
 ├─────────────────────────────────────────────────────────────┤
-│ Export          │ Maintain        │ Display                 │
-│  Em Markdown    │  ! Rebuild      │  o Toggle overlays      │
-│                 │  @ Smart        │  d Detailed overlay     │
-│                 │  v Validate     │  D Simple overlay       │
-│                 │                 │  W Configure...         │
+│ Maintain        │ Display                                   │
+│  ! Rebuild      │  o Toggle overlays                        │
+│  @ Smart        │  d Detailed overlay                       │
+│  v Validate     │  D Simple overlay                         │
+│                 │  W Configure...                           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -406,8 +405,22 @@ Formula syntax:
 
 ## Export
 
-### Markdown
-`C-c d d` then `E m` — Export nodes as markdown files with wikilinks
+discourse-graphs.el leverages Emacs' built-in export capabilities. You can use org-mode's native export functions to convert your discourse graph to various formats:
+
+- **HTML** — `C-c C-e h o` (org-html-export-to-html)
+- **Markdown** — `C-c C-e m m` (requires ox-md)
+- **LaTeX/PDF** — `C-c C-e l p` (org-latex-export-to-pdf)
+- **ASCII** — `C-c C-e t a` (org-ascii-export-to-ascii)
+- **ODT** — `C-c C-e o o` (org-odt-export-to-odt)
+
+For more export options, see [Org Mode Export Documentation](https://orgmode.org/manual/Exporting.html).
+
+### Tips for Exporting Discourse Graphs
+
+1. **Export individual files** — Open a node file and use standard org export commands
+2. **Export analysis files** — Synthesis dashboards and query results export cleanly to HTML/PDF
+3. **Preserve links** — Org's export backends handle internal links automatically
+4. **Custom backends** — Extend org export for specialized discourse graph formats if needed
 
 ## Maintenance
 

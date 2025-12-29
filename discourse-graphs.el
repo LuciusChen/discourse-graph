@@ -183,13 +183,6 @@ Set to nil to disable auto-formatting."
   :type 'boolean
   :group 'discourse-graphs)
 
-
-(defcustom dg-export-link-style 'wikilink
-  "Link style for markdown export.
-`wikilink' for [[Title]] style, `markdown' for [Title](file.md) style."
-  :type '(choice (const wikilink) (const markdown))
-  :group 'discourse-graphs)
-
 ;;; ============================================================
 ;;; Extract Content to Heading Configuration
 ;;; ============================================================
@@ -2132,79 +2125,6 @@ but will be ignored until DG_TYPE is set again."
       (message "Node removed from discourse graph"))))
 
 ;;; ============================================================
-;;; Export: Markdown
-;;; ============================================================
-
-(defun dg--sanitize-filename (title)
-  "Sanitize TITLE for use as filename."
-  (let ((clean (replace-regexp-in-string "[\\/:*?\"<>|]" "_" title)))
-    (truncate-string-to-width clean 60 nil nil)))
-
-(defun dg--format-md-link (title)
-  "Format markdown link to TITLE."
-  (pcase dg-export-link-style
-    ('wikilink (format "[[%s]]" title))
-    ('markdown (format "[%s](%s.md)" title (dg--sanitize-filename title)))))
-
-(defun dg-export-markdown (&optional directory)
-  "Export entire discourse graph to markdown files in DIRECTORY."
-  (interactive "DExport to directory: ")
-  (let ((nodes (sqlite-select (dg--db)
-                              "SELECT id, type, title, outline_path FROM nodes"))
-        (exported 0))
-    (dolist (row nodes)
-      (let* ((id (nth 0 row))
-             (ntype (nth 1 row))
-             (title (nth 2 row))
-             (filename (dg--sanitize-filename title))
-             (filepath (expand-file-name (concat filename ".md") directory))
-             (rels (dg-get-relations id))
-             (attrs (dg-get-all-attributes id)))
-        (with-temp-file filepath
-          ;; YAML front matter
-          (insert "---\n")
-          (insert (format "title: \"%s\"\n" (replace-regexp-in-string "\"" "\\\\\"" title)))
-          (insert (format "type: %s\n" ntype))
-          (insert (format "id: %s\n" id))
-          (insert "---\n\n")
-          ;; Title
-          (insert (format "# %s\n\n" title))
-          ;; Attributes
-          (insert "## Attributes\n\n")
-          (insert (format "- **Type**: %s\n" ntype))
-          (let ((supp (plist-get attrs :support-count))
-                (opp (plist-get attrs :oppose-count))
-                (score (plist-get attrs :evidence-score)))
-            (cond
-             ((and (> supp 0) (> opp 0))
-              (insert (format "- **Support Score**: %+d (↑%d ↓%d)\n" score supp opp)))
-             ((> supp 0)
-              (insert (format "- **Support Score**: %+d (↑%d)\n" score supp)))
-             ((> opp 0)
-              (insert (format "- **Support Score**: %+d (↓%d)\n" score opp)))))
-          ;; Relations
-          (when (plist-get rels :outgoing)
-            (insert "\n## Outgoing Relations\n\n")
-            (let ((grouped (seq-group-by (lambda (r) (nth 1 r))
-                                         (plist-get rels :outgoing))))
-              (dolist (group grouped)
-                (insert (format "### %s\n\n" (car group)))
-                (dolist (r (cdr group))
-                  (let ((target-title (or (nth 3 r) (nth 2 r))))
-                    (insert (format "- %s\n" (dg--format-md-link target-title))))))))
-          (when (plist-get rels :incoming)
-            (insert "\n## Incoming Relations\n\n")
-            (let ((grouped (seq-group-by (lambda (r) (nth 1 r))
-                                         (plist-get rels :incoming))))
-              (dolist (group grouped)
-                (insert (format "### %s\n\n" (car group)))
-                (dolist (r (cdr group))
-                  (let ((source-title (or (nth 3 r) (nth 2 r))))
-                    (insert (format "- %s\n" (dg--format-md-link source-title)))))))))
-        (cl-incf exported)))
-    (message "Exported %d nodes to %s" exported directory)))
-
-;;; ============================================================
 ;;; Overlay System (Relation Count Indicators)
 ;;; ============================================================
 
@@ -2373,9 +2293,7 @@ but will be ignored until DG_TYPE is set again."
     ("A" "Analyze question" dg-analyze-question)
     ("Q" "Query builder" dg-query-builder)
     ("I" "Node index" dg-insert-node-index)]]
-  [["Export"
-    ("E m" "Markdown" dg-export-markdown)]
-   ["Maintain"
+  [["Maintain"
     ("!" "Full rebuild" dg-rebuild-cache)
     ("@" "Smart rebuild" dg-smart-rebuild)
     ("v" "Validate" dg-validate)]
@@ -2412,9 +2330,7 @@ but will be ignored until DG_TYPE is set again."
     ("x" "Set extract target" dg--set-extract-target)]
    ["Denote"
     ("D" "Use denote" dg--toggle-denote)
-    ("K" "Keywords as type" dg--toggle-keywords-type)]
-   ["Export"
-    ("l" "Link style" dg--cycle-link-style)]])
+    ("K" "Keywords as type" dg--toggle-keywords-type)]])
 
 (defun dg--set-extract-target ()
   "Set extract target file."
@@ -2470,15 +2386,6 @@ but will be ignored until DG_TYPE is set again."
   (interactive)
   (setq dg-denote-keywords-as-type (not dg-denote-keywords-as-type))
   (message "Denote keywords as type: %s" (if dg-denote-keywords-as-type "ON" "OFF")))
-
-(defun dg--cycle-link-style ()
-  "Cycle export link style."
-  (interactive)
-  (setq dg-export-link-style
-        (pcase dg-export-link-style
-          ('wikilink 'markdown)
-          ('markdown 'wikilink)))
-  (message "Link style: %s" dg-export-link-style))
 
 ;;; ============================================================
 ;;; Query Builder (Transient-based dblock creation)
