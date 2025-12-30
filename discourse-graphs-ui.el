@@ -148,7 +148,7 @@
   (interactive)
   (when dg-ui--server
     (dg-ui-stop-server))
-  
+
   (setq dg-ui--server
         (websocket-server
          dg-ui-port
@@ -156,7 +156,11 @@
          :on-message #'dg-ui--handle-message
          :on-open #'dg-ui--on-client-open
          :on-close #'dg-ui--on-client-close))
-  
+
+  ;; Auto-enable refresh hooks
+  (add-hook 'after-save-hook #'dg-ui--after-save-hook)
+  (add-hook 'dg-after-change-hook #'dg-ui--on-data-change)
+
   (message "DG-UI: Server started on %s:%d" dg-ui-host dg-ui-port))
 
 ;;;###autoload
@@ -166,6 +170,9 @@
   (when dg-ui--auto-update-timer
     (cancel-timer dg-ui--auto-update-timer)
     (setq dg-ui--auto-update-timer nil))
+  ;; Remove hooks
+  (remove-hook 'after-save-hook #'dg-ui--after-save-hook)
+  (remove-hook 'dg-after-change-hook #'dg-ui--on-data-change)
   (when dg-ui--server
     (websocket-server-close dg-ui--server)
     (setq dg-ui--server nil
@@ -372,8 +379,19 @@
   "Update UI after saving an org file."
   (when (and dg-ui--server
              (derived-mode-p 'org-mode)
-             (member (file-name-directory (buffer-file-name)) dg-directories))
+             (buffer-file-name)
+             (cl-some (lambda (dir)
+                        (string-prefix-p (expand-file-name dir)
+                                         (expand-file-name (buffer-file-name))))
+                      dg-directories))
     (run-with-timer 0.5 nil #'dg-ui-refresh)))
+
+(defun dg-ui--on-data-change ()
+  "Update UI when discourse graph data changes.
+This is called via `dg-after-change-hook' for immediate updates
+after operations like `dg-remove-relation' or `dg-unmark-node'."
+  (when dg-ui--server
+    (run-with-timer 0.1 nil #'dg-ui-refresh)))
 
 (defun dg-ui-enable-auto-refresh ()
   "Enable automatic UI refresh on file save."
