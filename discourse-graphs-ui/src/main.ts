@@ -124,13 +124,16 @@ class DiscourseGraphsUI {
       return linkCount === 0 ? 0.5 : 0;
     }));
     
-    // Collision force - prevent node overlap
+    // Collision force - prevent node overlap, scales with link distance
+    const collisionStrength = Math.min(0.7, this.currentLinkDistance / 100);
     this.graph.d3Force('collision', d3.forceCollide()
       .radius((node: any) => {
         const nodeR = Math.sqrt(Math.max(0, node.val || 1)) * 3;
-        return nodeR + 10;  // Add padding
+        // Padding scales with link distance (smaller distance = less padding)
+        const padding = Math.max(2, this.currentLinkDistance / 10);
+        return nodeR + padding;
       })
-      .strength(0.7)  // Strong enough to prevent overlap
+      .strength(collisionStrength)
     );
   }
 
@@ -664,10 +667,7 @@ class DiscourseGraphsUI {
       const value = Number((e.target as HTMLInputElement).value);
       this.currentChargeStrength = value;
       document.getElementById('chargeValue')!.textContent = String(value);
-      this.graph.d3Force('charge', d3.forceManyBody()
-        .strength(-value)
-        .distanceMax(PHYSICS.CHARGE_DISTANCE_MAX)
-      );
+      this.configureForces();
       this.graph.d3ReheatSimulation();
     });
 
@@ -676,7 +676,7 @@ class DiscourseGraphsUI {
       const value = Number((e.target as HTMLInputElement).value);
       this.currentLinkDistance = value;
       document.getElementById('distanceValue')!.textContent = String(value);
-      this.graph.d3Force('link').distance(value);
+      this.configureForces();
       this.graph.d3ReheatSimulation();
     });
 
