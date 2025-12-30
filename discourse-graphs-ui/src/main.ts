@@ -24,7 +24,7 @@ class DiscourseGraphsUI {
   private lastNodeClickTime: number = 0;
   private resizeTimeout: number | null = null;
   private currentChargeStrength: number = PHYSICS.CHARGE_STRENGTH;
-  private currentLinkDistance: number = PHYSICS.LINK_DISTANCE;
+  private currentLinkDistance: number = PHYSICS.RADIAL_RADIUS;
 
   constructor() {
     this.colorManager = new ColorManager();
