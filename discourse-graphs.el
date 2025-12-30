@@ -240,6 +240,11 @@ Examples:
 (defvar dg--nav-history-max 20
   "Maximum size of navigation history.")
 
+(defvar dg-after-change-hook nil
+  "Hook run after discourse graph data changes.
+This includes node creation, deletion, and relation changes.
+Use this to trigger UI updates or other side effects.")
+
 ;;; ============================================================
 ;;; Database Management
 ;;; ============================================================
@@ -2104,7 +2109,8 @@ Shows all relations and lets user select which to remove."
            (dg--db)
            "DELETE FROM relations WHERE source_id = ? AND target_id = ? AND rel_type = ?"
            (list id target-id rel-type))
-          (message "Removed: %s  %s (save to update context)" rel-type target-id))))))
+          (run-hooks 'dg-after-change-hook)
+          (message "Removed: %s → %s" rel-type target-id))))))
 
 
 (defun dg-unmark-node ()
@@ -2122,6 +2128,7 @@ but will be ignored until DG_TYPE is set again."
                       (list id id))
       ;; Remove DG_TYPE property
       (org-delete-property "DG_TYPE")
+      (run-hooks 'dg-after-change-hook)
       (message "Node removed from discourse graph"))))
 
 ;;; ============================================================
