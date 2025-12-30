@@ -8,12 +8,12 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "vite": "^5.4.11",
+    "@types/d3": "^7.4.3",
     "typescript": "^5.3.0",
-    "@types/d3": "^7.4.3"
+    "vite": "^5.4.11"
   },
   "dependencies": {
-    "force-graph": "^1.43.0",
-    "d3": "^7.8.0"
+    "d3": "^7.8.0",
+    "force-graph": "^1.43.0"
   }
 }
