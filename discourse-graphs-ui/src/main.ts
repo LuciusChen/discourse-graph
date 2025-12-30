@@ -899,44 +899,6 @@ Want to move the entire graph?
     return cleaned.trim();
   }
 
-  private cleanOrgContentWithHeading(content: string, node: Node): string {
-    if (!content) return '';
-    
-    let cleaned = content;
-    
-    // Extract the original heading level (count the stars)
-    const headingMatch = content.match(/^(\*+) /m);
-    const headingLevel = headingMatch ? headingMatch[1].length : 1;
-    
-    // Remove PROPERTIES drawers
-    cleaned = cleaned.replace(/:PROPERTIES:[\s\S]*?:END:/g, '');
-    
-    // Remove LOGBOOK drawers
-    cleaned = cleaned.replace(/:LOGBOOK:[\s\S]*?:END:/g, '');
-    
-    // Remove the original org heading line
-    cleaned = cleaned.replace(/^\*+ .*$/m, '');
-    
-    // Convert org sub-headings to markdown (from deepest to shallowest)
-    cleaned = cleaned.replace(/^\*\*\*\*\* (.*)$/gm, '##### $1');
-    cleaned = cleaned.replace(/^\*\*\*\* (.*)$/gm, '#### $1');
-    cleaned = cleaned.replace(/^\*\*\* (.*)$/gm, '### $1');
-    cleaned = cleaned.replace(/^\*\* (.*)$/gm, '## $1');
-    cleaned = cleaned.replace(/^\* (.*)$/gm, '# $1');
-    
-    // Clean up excessive newlines
-    cleaned = cleaned.replace(/\n\n\n+/g, '\n\n');
-    
-    cleaned = cleaned.trim();
-    
-    // Add formatted heading with type short at the original org level
-    const typeShort = node.typeShort || node.type.toUpperCase();
-    const headingPrefix = '#'.repeat(headingLevel);
-    const heading = `${headingPrefix} ${typeShort}-${node.title}`;
-    
-    return cleaned ? `${heading}\n\n${cleaned}` : heading;
-  }
-
   private formatAsMarkdown(rootNode: Node, chain: Map<string, ChainNode>): string {
     const lines: string[] = [];
     const rootChainNode = chain.get(rootNode.id);

@@ -3,7 +3,6 @@ import { Node } from '../types';
 export class FilterManager {
   private enabledTypes = new Set<string>();
   private allTypes = new Set<string>();
-  private onChangeCallback: (() => void) | null = null;
 
   updateTypes(nodes: Node[]): void {
     this.allTypes.clear();
@@ -27,18 +26,6 @@ export class FilterManager {
     } else {
       this.enabledTypes.delete(type);
     }
-    
-    if (this.onChangeCallback) {
-      this.onChangeCallback();
-    }
-  }
-
-  isTypeEnabled(type: string): boolean {
-    return this.enabledTypes.has(type);
-  }
-
-  onChange(callback: () => void): void {
-    this.onChangeCallback = callback;
   }
 
   getEnabledTypes(): Set<string> {
