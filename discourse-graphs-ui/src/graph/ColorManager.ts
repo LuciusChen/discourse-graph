@@ -105,13 +105,4 @@ export class ColorManager {
     const map = isLightTheme ? this.nodeColorMapDimLight : this.nodeColorMapDimDark;
     return map.get(type) || map.get('default')!;
   }
-
-  getLinkColorDim(type: string, isLightTheme: boolean = false): string {
-    const map = isLightTheme ? this.linkColorMapDimLight : this.linkColorMapDimDark;
-    return map.get(type) || map.get('default')!;
-  }
-
-  getAllNodeColors(): Map<string, string> {
-    return new Map(this.nodeColorMap);
-  }
 }

@@ -184,12 +184,6 @@
       (dg-ui--send-to-clients `((type . "graphdata")
                                 (data . ,data))))))
 
-(defun dg-ui-follow-node (id)
-  "Send follow command for node ID."
-  (dg-ui--send-to-clients `((type . "command")
-                            (data . ((commandName . "follow")
-                                   (id . ,id))))))
-
 ;;; Auto-update
 
 (defun dg-ui-enable-auto-update (&optional interval)
