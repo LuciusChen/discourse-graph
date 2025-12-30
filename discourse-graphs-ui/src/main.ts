@@ -637,10 +637,7 @@ class DiscourseGraphsUI {
     if (d3Sim) {
       d3Sim.alpha(0.2).alphaTarget(0).restart();
     }
-    
-    // Reconfigure forces to handle new graph structure
-    this.configureForces();
-    
+
     // Auto-fit view with smooth animation (delayed for better effect)
     if (filteredNodes.length > 0) {
       setTimeout(() => {
