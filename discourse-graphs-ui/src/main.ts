@@ -23,8 +23,6 @@ class DiscourseGraphsUI {
   private isSidebarCollapsed = false;
   private lastNodeClickTime: number = 0;
   private resizeTimeout: number | null = null;
-  private currentChargeStrength: number = PHYSICS.CHARGE_STRENGTH;
-  private currentLinkDistance: number = PHYSICS.RADIAL_RADIUS;
 
   constructor() {
     this.colorManager = new ColorManager();
@@ -85,15 +83,15 @@ class DiscourseGraphsUI {
   }
 
   private configureForces(): void {
-    // Charge force (repulsion) - use current slider value
+    // Charge force (repulsion)
     this.graph.d3Force('charge', d3.forceManyBody()
-      .strength(-this.currentChargeStrength)
+      .strength(-PHYSICS.CHARGE_STRENGTH)
       .distanceMax(PHYSICS.CHARGE_DISTANCE_MAX)
     );
 
-    // Link force - use current slider value
+    // Link force
     this.graph.d3Force('link', d3.forceLink()
-      .distance(this.currentLinkDistance)
+      .distance(PHYSICS.RADIAL_RADIUS)
       .strength(0.6)
     );
 
@@ -124,16 +122,13 @@ class DiscourseGraphsUI {
       return linkCount === 0 ? 0.5 : 0;
     }));
     
-    // Collision force - prevent node overlap, scales with link distance
-    const collisionStrength = Math.min(0.7, this.currentLinkDistance / 100);
+    // Collision force - prevent node overlap
     this.graph.d3Force('collision', d3.forceCollide()
       .radius((node: any) => {
         const nodeR = Math.sqrt(Math.max(0, node.val || 1)) * 3;
-        // Padding scales with link distance (smaller distance = less padding)
-        const padding = Math.max(2, this.currentLinkDistance / 10);
-        return nodeR + padding;
+        return nodeR + 10;  // Add padding
       })
-      .strength(collisionStrength)
+      .strength(0.7)  // Strong enough to prevent overlap
     );
   }
 
@@ -664,19 +659,20 @@ class DiscourseGraphsUI {
     // Physics controls
     const chargeSlider = document.getElementById('chargeSlider') as HTMLInputElement;
     chargeSlider.addEventListener('input', (e) => {
-      const value = Number((e.target as HTMLInputElement).value);
-      this.currentChargeStrength = value;
-      document.getElementById('chargeValue')!.textContent = String(value);
-      this.configureForces();
+      const value = (e.target as HTMLInputElement).value;
+      document.getElementById('chargeValue')!.textContent = value;
+      this.graph.d3Force('charge', d3.forceManyBody()
+        .strength(-Number(value))
+        .distanceMax(300)
+      );
       this.graph.d3ReheatSimulation();
     });
 
     const distanceSlider = document.getElementById('distanceSlider') as HTMLInputElement;
     distanceSlider.addEventListener('input', (e) => {
-      const value = Number((e.target as HTMLInputElement).value);
-      this.currentLinkDistance = value;
-      document.getElementById('distanceValue')!.textContent = String(value);
-      this.configureForces();
+      const value = (e.target as HTMLInputElement).value;
+      document.getElementById('distanceValue')!.textContent = value;
+      this.graph.d3Force('link').distance(Number(value));
       this.graph.d3ReheatSimulation();
     });
 
